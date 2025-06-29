@@ -295,29 +295,28 @@
 
         // --- Core Calculation Logic ---
 
-        // Conversion rates from various frequencies to monthly and yearly
-        const conversionRates = {
-            'Weekly': { monthly: 52 / 12, yearly: 52 },
-            'Fortnightly': { monthly: 26 / 12, yearly: 26 },
-            'Monthly': { monthly: 1, yearly: 12 },
-            'Yearly': { monthly: 1 / 12, yearly: 1 }
-        };
-
-        // Function to calculate monthly and yearly amounts based on frequency
+        // Function to calculate all four frequencies (weekly, fortnightly, monthly, yearly)
         window.calculateAmounts = (amount, frequency) => {
             const parsedAmount = parseFloat(amount);
             if (isNaN(parsedAmount) || parsedAmount < 0) {
-                return { monthly: 0, yearly: 0 };
+                return { weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 };
             }
 
-            const rates = conversionRates[frequency];
-            if (rates) {
-                return {
-                    monthly: parsedAmount * rates.monthly,
-                    yearly: parsedAmount * rates.yearly
-                };
+            let yearlyAmount = 0;
+            switch (frequency) {
+                case 'Weekly': yearlyAmount = parsedAmount * 52; break;
+                case 'Fortnightly': yearlyAmount = parsedAmount * 26; break;
+                case 'Monthly': yearlyAmount = parsedAmount * 12; break;
+                case 'Yearly': yearlyAmount = parsedAmount * 1; break;
+                default: yearlyAmount = parsedAmount * 12; // Default to monthly if frequency is unknown
             }
-            return { monthly: 0, yearly: 0 };
+
+            return {
+                weekly: yearlyAmount / 52,
+                fortnightly: yearlyAmount / 26,
+                monthly: yearlyAmount / 12,
+                yearly: yearlyAmount
+            };
         };
 
         // New Zealand Tax Brackets (Updated to reflect changes from 31 July 2024)
@@ -514,31 +513,38 @@
         function updateSummary() {
             let totalIncome = 0;
             let totalExpenses = 0;
-            const currentFrequency = window.budgetData.summaryFrequency;
+            // Ensure the key matches the property names in the object returned by calculateAmounts
+            const currentFrequencyKey = window.budgetData.summaryFrequency.toLowerCase();
 
             window.budgetData.income.forEach(item => {
-                const amounts = window.calculateAmounts(item.amount, item.frequency);
-                totalIncome += amounts[currentFrequency.toLowerCase()]; // Use selected frequency
+                // Access the pre-calculated amount directly from the item, based on the selected frequency
+                totalIncome += item[currentFrequencyKey];
             });
 
             window.budgetData.basicExpenses.forEach(item => {
-                const amounts = window.calculateAmounts(item.amount, item.frequency);
-                totalExpenses += amounts[currentFrequency.toLowerCase()]; // Use selected frequency
+                totalExpenses += item[currentFrequencyKey];
             });
             window.budgetData.lifestyleExpenses.forEach(item => {
-                const amounts = window.calculateAmounts(item.amount, item.frequency);
-                totalExpenses += amounts[currentFrequency.toLowerCase()]; // Use selected frequency
+                totalExpenses += item[currentFrequencyKey];
             });
             window.budgetData.loanRepayments.forEach(item => {
-                const amounts = window.calculateAmounts(item.amount, item.frequency);
-                totalExpenses += amounts[currentFrequency.toLowerCase()]; // Use selected frequency
+                totalExpenses += item[currentFrequencyKey];
             });
 
 
             const totalIncomeDisplay = document.getElementById('totalIncomeSummary');
             const totalExpensesDisplay = document.getElementById('totalExpensesSummary');
             const surplusDeficitDisplay = document.getElementById('surplusDeficitSummary');
-            const summaryFrequencyLabel = document.getElementById('summaryFrequencyLabel');
+            const summaryFrequencyLabel1 = document.getElementById('summaryFrequencyLabel1'); // For Income
+            const summaryFrequencyLabel2 = document.getElementById('summaryFrequencyLabel2'); // For Expenses
+            const summaryFrequencyLabel3 = document.getElementById('summaryFrequencyLabel3'); // For Surplus/Deficit
+
+
+            // Update the labels to reflect the current frequency
+            if (summaryFrequencyLabel1) summaryFrequencyLabel1.textContent = `Total ${window.budgetData.summaryFrequency} `;
+            if (summaryFrequencyLabel2) summaryFrequencyLabel2.textContent = `Total ${window.budgetData.summaryFrequency} `;
+            // The "Surplus/Deficit" label doesn't need "Total"
+            if (summaryFrequencyLabel3) summaryFrequencyLabel3.textContent = `${window.budgetData.summaryFrequency} `;
 
             totalIncomeDisplay.textContent = totalIncome.toFixed(2);
             totalExpensesDisplay.textContent = totalExpenses.toFixed(2);
@@ -551,9 +557,6 @@
             } else {
                 surplusDeficitDisplay.classList.add('deficit');
             }
-
-            // Update the label to reflect the current frequency
-            summaryFrequencyLabel.textContent = `Total ${currentFrequency} `;
         }
 
         // --- Event Handlers ---
@@ -568,8 +571,10 @@
             // Use parseFloat to handle incomplete numbers (e.g., '5', '50', '50.')
             item.amount = parseFloat(element.value);
 
-            // Recalculate monthly/yearly for this item instantly (these are used for summary)
+            // Recalculate ALL frequency amounts for this item
             const calculated = window.calculateAmounts(item.amount, item.frequency);
+            item.weekly = calculated.weekly;
+            item.fortnightly = calculated.fortnightly;
             item.monthly = calculated.monthly;
             item.yearly = calculated.yearly;
 
@@ -603,7 +608,10 @@
 
             item.frequency = element.value;
 
+            // Recalculate ALL frequency amounts for this item
             const calculated = window.calculateAmounts(item.amount, item.frequency);
+            item.weekly = calculated.weekly;
+            item.fortnightly = calculated.fortnightly;
             item.monthly = calculated.monthly;
             item.yearly = calculated.yearly;
 
@@ -647,153 +655,155 @@
         // Initial data setup based on provided CSVs
         function initializeBudgetData() {
             window.budgetData.income = [
-                { name: 'Salary After Tax (1)', amount: 0, frequency: 'Weekly', monthly: 0, yearly: 0 },
-                { name: 'Salary After Tax (2)', amount: 0, frequency: 'Weekly', monthly: 0, yearly: 0 },
-                { name: 'Casual or Part Time Salary', amount: 0, frequency: 'Weekly', monthly: 0, yearly: 0 },
-                { name: 'Allowance\'s', amount: 0, frequency: 'Monthly', monthly: 0, yearly: 0 },
-                { name: 'Interest on Savings', amount: 0, frequency: 'Fortnightly', monthly: 0, yearly: 0 },
-                { name: 'Interest on Investments', amount: 0, frequency: 'Monthly', monthly: 0, yearly: 0 },
-                { name: 'Dividends', amount: 0, frequency: 'Weekly', monthly: 0, yearly: 0 },
-                { name: 'Rent from Property', amount: 0, frequency: 'Weekly', monthly: 0, yearly: 0 },
-                { name: 'Board', amount: 0, frequency: 'Monthly', monthly: 0, yearly: 0 },
-                { name: 'Other Income', amount: 0, frequency: 'Fortnightly', monthly: 0, yearly: 0 }
+                { name: 'Salary After Tax (1)', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Salary After Tax (2)', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Casual or Part Time Salary', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Allowance\'s', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Interest on Savings', amount: 0, frequency: 'Fortnightly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Interest on Investments', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Dividends', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Rent from Property', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Board', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other Income', amount: 0, frequency: 'Fortnightly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 }
             ];
 
             window.budgetData.basicExpenses = [
                 // Housing
-                { name: 'Mortgage', amount: 0, frequency: 'Monthly', monthly: 0, yearly: 0 },
-                { name: 'Board', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Rent', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Mortgage', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Board', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Rent', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Maintenance
-                { name: 'Security', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Home Maintenance & Repairs', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Major Improvements', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Gardens and Fences', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Pest Control', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Electrical and Furniture Replacement', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Linen and Utensils', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Swimming Pool', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Maintenance)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Security', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Home Maintenance & Repairs', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Major Improvements', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Gardens and Fences', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Pest Control', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Electrical and Furniture Replacement', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Linen and Utensils', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Swimming Pool', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Maintenance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Food
-                { name: 'Groceries', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Bought Meals', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Coffee\'s Out & Snacks', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Food)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Groceries', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Bought Meals', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Coffee\'s Out & Snacks', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Food)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Educational & Professional
-                { name: 'Study Course Fees', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Professional Subscriptions', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Student Union Fees', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'School Uniforms', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Equipment and Tools', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Books & Stationary', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'School Fees', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Special Tuition (eg Music Lessons)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Excursions', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Child Care', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Educational)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Study Course Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Professional Subscriptions', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Student Union Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'School Uniforms', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Equipment and Tools', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Books & Stationary', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'School Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Special Tuition (eg Music Lessons)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Excursions', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Child Care', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Educational)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Utilities
-                { name: 'Rates & Water', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Body Corporate', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Electricity / Gas', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Home Phone', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Mobile Phone', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Internet', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Utilities)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Rates & Water', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Body Corporate', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Electricity / Gas', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Home Phone', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Mobile Phone', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Internet', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Utilities)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Transport
-                { name: 'Petrol', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Registration', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Motor Association', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Maintenance & Repairs (Transport)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Public Transport', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Parking Fees', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Transport)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Petrol', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Registration', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Motor Association', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Maintenance & Repairs (Transport)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Public Transport', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Parking Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Transport)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Health & Medical
-                { name: 'Dentist', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Doctor', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Optometrist', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Chemist', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Chiropractor', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Physiotherapist', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Specialists', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Health)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Dentist', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Doctor', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Optometrist', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Chemist', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Chiropractor', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Physiotherapist', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Specialists', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Health)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Insurance
-                { name: 'Home & Contents', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Medical (Insurance)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Vehicle (Insurance)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Boat & Caravan', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Life (Insurance)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Income Protection', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Insurance)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Home & Contents', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Medical (Insurance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Vehicle (Insurance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Boat & Caravan', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Life (Insurance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Income Protection', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Insurance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Clothing & Grooming
-                { name: 'Work Clothing or Uniform', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Social Clothing', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Sports Clothing', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Footwear', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Haircare', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Makeup & Toiletries', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 }
+                { name: 'Work Clothing or Uniform', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Social Clothing', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Sports Clothing', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Footwear', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Haircare', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Makeup & Toiletries', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 }
             ];
 
             window.budgetData.lifestyleExpenses = [
                 // Holiday & Travel
-                { name: 'Travel fares & Fuel', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Accommodation', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Meals (Holiday)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Sightseeing', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Holiday)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Travel fares & Fuel', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Accommodation', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Meals (Holiday)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Sightseeing', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Holiday)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Gifts & Donations
-                { name: 'Donations', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Birthday Gifts', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Birthday Parties', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Christmas Gifts', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Work related Gifts', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Aniversaries', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Weddings', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Births and Christenings', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Special Occasions', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Pocket Money', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Gifts)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Donations', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Birthday Gifts', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Birthday Parties', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Christmas Gifts', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Work related Gifts', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Aniversaries', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Weddings', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Births and Christenings', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Special Occasions', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Pocket Money', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Gifts)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Pets
-                { name: 'Food (Pets)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Vet Fees', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Medication and Treatment (Pets)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Registration (Pets)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Pets)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Food (Pets)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Vet Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Medication and Treatment (Pets)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Registration (Pets)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Pets)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Entertainment
-                { name: 'Movies & Concerts', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Video Hire', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Music / CD\'s', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Exhibitions and displays', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Eating out', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Takeaway Meals', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Club Fees', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Newspapers/magazines/books', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Entertainment)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Movies & Concerts', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Video Hire', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Music / CD\'s', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Exhibitions and displays', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Eating out', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Takeaway Meals', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Club Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Newspapers/magazines/books', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Entertainment)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Hobbies & Sports
-                { name: 'Equipment Purchases', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Equipment Hire', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Fees (Hobbies)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Club Memberships (Hobbies)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Hobbies)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
+                { name: 'Equipment Purchases', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Equipment Hire', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Fees (Hobbies)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Club Memberships (Hobbies)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Hobbies)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
                 // Personal
-                { name: 'Alcohol', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Cigarettes', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other (Personal)', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 }
+                { name: 'Alcohol', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Cigarettes', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other (Personal)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 }
             ];
 
             window.budgetData.loanRepayments = [
-                { name: 'Car Loan', amount: 0, frequency: 'Weekly', monthly: 0, yearly: 0 },
-                { name: 'Credit Cards', amount: 0, frequency: 'Fortnightly', monthly: 0, yearly: 0 },
-                { name: 'Store Cards', amount: 0, frequency: 'Monthly', monthly: 0, yearly: 0 },
-                { name: 'Buy Now Pay Later', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Personal Bank Loan', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Personal Loan', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 },
-                { name: 'Other Loan', amount: 0, frequency: 'Yearly', monthly: 0, yearly: 0 }
+                { name: 'Car Loan', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Credit Cards', amount: 0, frequency: 'Fortnightly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Store Cards', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Buy Now Pay Later', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Personal Bank Loan', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Personal Loan', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
+                { name: 'Other Loan', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 }
             ];
 
-            // Calculate initial monthly/yearly values for all data
+            // Calculate initial monthly/yearly/weekly/fortnightly values for all data
             ['income', 'basicExpenses', 'lifestyleExpenses', 'loanRepayments'].forEach(category => {
                 window.budgetData[category].forEach(item => {
                     const calculated = window.calculateAmounts(item.amount, item.frequency);
+                    item.weekly = calculated.weekly;
+                    item.fortnightly = calculated.fortnightly;
                     item.monthly = calculated.monthly;
                     item.yearly = calculated.yearly;
                 });
@@ -844,7 +854,7 @@
         <div class="sticky-header-wrapper">
             <div class="summary-box grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <p class="text-gray-600 text-lg mb-1"><span id="summaryFrequencyLabel">Total Monthly </span> Income</p>
+                    <p class="text-gray-600 text-lg mb-1"><span id="summaryFrequencyLabel1">Total Monthly </span> Income</p>
                     <p class="summary-value">$<span id="totalIncomeSummary">0.00</span></p>
                 </div>
                 <div>
