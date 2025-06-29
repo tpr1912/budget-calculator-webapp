@@ -173,10 +173,13 @@
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 
-                if (Object.keys(firebaseConfig).length === 0) {
-                    console.error("Firebase config is missing. Data persistence will not work.");
-                    showMessageBox("Error: Firebase configuration missing. Data will not be saved.");
-                    return;
+                if (Object.keys(firebaseConfig).length === 0 || !firebaseConfig.apiKey) {
+                    console.warn("Firebase config is missing or incomplete. Data persistence will not work.");
+                    showMessageBox("Error: Firebase configuration missing. Data will not be saved. You can still use the tool for calculations during this session.");
+                    // Continue with initial data rendering even if Firebase init fails
+                    initializeBudgetData();
+                    renderAllData();
+                    return; // Exit here, no need to proceed with Firebase app initialization or auth
                 }
 
                 const app = initializeApp(firebaseConfig);
@@ -209,7 +212,10 @@
 
             } catch (error) {
                 console.error("Error initializing Firebase:", error);
-                showMessageBox("Error initializing application. Data persistence might be affected.");
+                showMessageBox("Error initializing application. Data persistence might be affected. You can still use the tool for calculations during this session.");
+                // Ensure initial data rendering happens even if there's a Firebase initialization error
+                initializeBudgetData();
+                renderAllData();
             }
         }
 
@@ -253,9 +259,10 @@
 
         // Function to save data to Firestore
         window.saveDataToFirestore = async function() {
+            // Only attempt to save if Firestore (db) and user (userId) are ready
             if (!db || !userId || !isAuthReady) {
-                console.warn("Firestore not ready or user not authenticated. Cannot save data.");
-                return;
+                console.warn("Firestore not ready or user not authenticated. Data will not be saved permanently.");
+                return; // Do not attempt to save if Firebase is not initialized
             }
             try {
                 // Serialize the budgetData object to a JSON string before saving
@@ -366,7 +373,10 @@
                 incomeBody.innerHTML += renderItemRowHtml(item, index, 'income');
             });
             updateSummary();
-            window.saveDataToFirestore();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
+            }
         }
 
         // Function to render basic expenses section
@@ -404,7 +414,10 @@
                 }
             });
             updateSummary();
-            window.saveDataToFirestore();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
+            }
         }
 
         // Function to render lifestyle expenses section
@@ -436,7 +449,10 @@
                 }
             });
             updateSummary();
-            window.saveDataToFirestore();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
+            }
         }
 
         // Function to render loan repayments section
@@ -447,7 +463,10 @@
                 loanBody.innerHTML += renderItemRowHtml(item, index, 'loanRepayments');
             });
             updateSummary();
-            window.saveDataToFirestore();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
+            }
         }
 
         // Function to render tax calculator section
@@ -464,7 +483,10 @@
 
             taxAmountDisplay.textContent = window.budgetData.taxCalc.taxAmount.toFixed(2);
             afterTaxAmountDisplay.textContent = window.budgetData.taxCalc.afterTaxAmount.toFixed(2);
-            window.saveDataToFirestore();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
+            }
         }
 
         // Function to calculate and update summary totals
@@ -520,7 +542,10 @@
             else if (category === 'loanRepayments') renderLoanRepayments();
 
             updateSummary();
-            window.saveDataToFirestore();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
+            }
         };
 
         // Handles input change for tax calculator
@@ -532,7 +557,10 @@
                 window.budgetData.taxCalc.beforeTaxAmount = 0; // Reset if invalid input
             }
             renderTaxCalculator();
-            window.saveDataToFirestore();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
+            }
         };
 
         // Initial data setup based on provided CSVs
@@ -709,9 +737,8 @@
 
         // Run on window load
         window.onload = function() {
-            initializeBudgetData(); // Set up initial data structure with default values
-            initializeFirebase(); // Initialize Firebase and data listener
-            // The renderAllData() will be called by setupFirestoreListener after data is loaded or initialized.
+            // Call initializeFirebase first. It will handle calling initializeBudgetData and renderAllData.
+            initializeFirebase();
         };
     </script>
 </head>
