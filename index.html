@@ -493,9 +493,13 @@
             const taxAmountDisplay = document.getElementById('taxAmountDisplay');
             const afterTaxAmountDisplay = document.getElementById('afterTaxAmountDisplay');
 
-            // Ensure value for input is always a number for display
-            const displayBeforeTaxAmount = isNaN(window.budgetData.taxCalc.beforeTaxAmount) ? '0.00' : window.budgetData.taxCalc.beforeTaxAmount.toFixed(2);
-            beforeTaxInput.value = displayBeforeTaxAmount;
+            // Only update the value if the input field is NOT currently focused to allow typing
+            // This is the key fix for the tax calculator input bug
+            if (document.activeElement !== beforeTaxInput) {
+                const displayBeforeTaxAmount = isNaN(window.budgetData.taxCalc.beforeTaxAmount) ? '0.00' : window.budgetData.taxCalc.beforeTaxAmount.toFixed(2);
+                beforeTaxInput.value = displayBeforeTaxAmount;
+            }
+
 
             const tax = window.calculateTax(window.budgetData.taxCalc.beforeTaxAmount);
             window.budgetData.taxCalc.taxAmount = tax;
@@ -571,7 +575,7 @@
             // Use parseFloat to handle incomplete numbers (e.g., '5', '50', '50.')
             item.amount = parseFloat(element.value);
 
-            // Recalculate ALL frequency amounts for this item
+            // Recalculate ALL frequency amounts for this item instantly
             const calculated = window.calculateAmounts(item.amount, item.frequency);
             item.weekly = calculated.weekly;
             item.fortnightly = calculated.fortnightly;
@@ -637,20 +641,32 @@
             }
         };
 
-        // Handles input change for tax calculator
-        window.handleTaxInputChange = (element) => {
+        // New: Handles input for tax calculator (updates data and summary, no re-render)
+        window.handleTaxAmountInput = (element) => {
             const beforeTaxAmount = parseFloat(element.value);
             if (!isNaN(beforeTaxAmount) && beforeTaxAmount >= 0) {
                 window.budgetData.taxCalc.beforeTaxAmount = beforeTaxAmount;
             } else {
                 window.budgetData.taxCalc.beforeTaxAmount = 0; // Reset if invalid input
             }
-            renderTaxCalculator();
-            // Only attempt to save if Firebase is properly initialized and authenticated
+            // Update the calculated tax and after-tax amounts immediately
+            const tax = window.calculateTax(window.budgetData.taxCalc.beforeTaxAmount);
+            window.budgetData.taxCalc.taxAmount = tax;
+            window.budgetData.taxCalc.afterTaxAmount = window.budgetData.taxCalc.beforeTaxAmount - tax;
+
+            // Update the display for tax and after-tax amounts instantly
+            document.getElementById('taxAmountDisplay').textContent = window.budgetData.taxCalc.taxAmount.toFixed(2);
+            document.getElementById('afterTaxAmountDisplay').textContent = window.budgetData.taxCalc.afterTaxAmount.toFixed(2);
+        };
+
+        // New: Handles blur for tax calculator (re-renders to format and saves data)
+        window.handleTaxAmountBlur = (element) => {
+            renderTaxCalculator(); // Re-render to format the input field and other displays
             if (db && userId && isAuthReady) {
                 window.saveDataToFirestore();
             }
         };
+
 
         // Initial data setup based on provided CSVs
         function initializeBudgetData() {
@@ -986,221 +1002,4 @@
 
             <h3 class="subsection-title">Transport</h3>
             <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="transportBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Health & Medical</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="healthBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Insurance</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="insuranceBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Clothing & Grooming</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="clothingBody"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- Lifestyle Expenses Section -->
-        <section class="mb-8">
-            <h2 class="section-title">Lifestyle Expenses</h2>
-
-            <h3 class="subsection-title">Holiday & Travel</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="holidayBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Gifts & Donations</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="giftsBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Pets</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="petsBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Entertainment</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="entertainmentBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Hobbies & Sports</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="hobbiesBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Personal</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="personalBody"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- Loan Repayments Section -->
-        <section class="mb-8">
-            <h2 class="section-title">Loan Repayments</h2>
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="loanBody">
-                        <!-- Loan repayment rows will be rendered here by JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- Tax Calculator Section -->
-        <section class="mb-8">
-            <h2 class="section-title">Tax Calculator (NZ)</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                <div class="flex flex-col gap-2">
-                    <label for="beforeTaxAmount" class="font-medium text-gray-700">Annual Income Before Tax ($)</label>
-                    <input type="number" step="0.01" id="beforeTaxAmount" value="55000.00"
-                        class="input-field" oninput="handleTaxInputChange(this)">
-                </div>
-                <div class="flex flex-col gap-2">
-                    <p class="font-medium text-gray-700">Estimated Annual Tax:</p>
-                    <p class="text-2xl font-bold text-gray-800">$<span id="taxAmountDisplay">0.00</span></p>
-                </div>
-                <div class="col-span-1 md:col-span-2 flex flex-col gap-2 mt-4">
-                    <p class="font-medium text-gray-700">Estimated Annual Income After Tax:</p>
-                    <p class="text-3xl font-bold text-indigo-600">$<span id="afterTaxAmountDisplay">0.00</span></p>
-                </div>
-            </div>
-            <div class="mt-6">
-                <h3 class="subsection-title">NZ Tax Brackets (Effective from 31 July 2024)</h3>
-                <ul class="list-disc list-inside text-gray-600">
-                    <li>$0 - $15,600: 10.5%</li>
-                    <li>$15,601 - $53,500: 17.5%</li>
-                    <li>$53,501 - $78,100: 30%</li>
-                    <li>$78,101 - $180,000: 33%</li>
-                    <li>$180,000+: 39%</li>
-                </ul>
-            </div>
-        </section>
-
-    </div>
-</body>
-</html>
+                <table class="min-w-full bg-white roun
