@@ -133,6 +133,18 @@
         .message-box button:hover {
             background-color: #4338ca;
         }
+
+        /* Sticky header styles */
+        .sticky-header-wrapper {
+            position: sticky;
+            top: 0;
+            z-index: 100; /* Ensure it stays above other content */
+            background-color: #f3f4f6; /* Match body background or set to white */
+            padding-top: 1rem; /* Add some space above the sticky element */
+            padding-bottom: 1rem; /* Add some space below the sticky element */
+            border-bottom: 1px solid #e5e7eb; /* Optional: A subtle line to separate */
+            margin-bottom: 2rem; /* Ensure space before content below it */
+        }
     </style>
     <!-- Firebase SDKs -->
     <script type="module">
@@ -229,7 +241,8 @@
                 beforeTaxAmount: 55000,
                 taxAmount: 0,
                 afterTaxAmount: 0
-            }
+            },
+            summaryFrequency: 'Monthly' // New property for summary display frequency
         };
 
         // Function to set up Firestore snapshot listener
@@ -245,6 +258,10 @@
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     window.budgetData = JSON.parse(data.data); // Parse the stored JSON string
+                    // Ensure new properties like summaryFrequency are set if old data doesn't have them
+                    if (typeof window.budgetData.summaryFrequency === 'undefined') {
+                        window.budgetData.summaryFrequency = 'Monthly';
+                    }
                     console.log("Data loaded from Firestore:", window.budgetData);
                     renderAllData(); // Re-render the UI with loaded data
                 } else {
@@ -348,12 +365,12 @@
                         <input type="number" step="0.01" value="${displayAmount}"
                             class="input-field amount-input"
                             data-category="${category}" data-index="${originalIndex}"
-                            oninput="handleInputChange(this)">
+                            oninput="handleAmountInput(this)" onblur="handleAmountBlur(this)">
                     </td>
                     <td class="w-1/4">
                         <select class="input-field frequency-select"
                             data-category="${category}" data-index="${originalIndex}"
-                            onchange="handleInputChange(this)">
+                            onchange="handleFrequencyChange(this)">
                             <option value="Weekly" ${item.frequency === 'Weekly' ? 'selected' : ''}>Weekly</option>
                             <option value="Fortnightly" ${item.frequency === 'Fortnightly' ? 'selected' : ''}>Fortnightly</option>
                             <option value="Monthly" ${item.frequency === 'Monthly' ? 'selected' : ''}>Monthly</option>
@@ -495,22 +512,38 @@
 
         // Function to calculate and update summary totals
         function updateSummary() {
-            let totalIncomeMonthly = 0;
-            window.budgetData.income.forEach(item => totalIncomeMonthly += item.monthly);
+            let totalIncome = 0;
+            let totalExpenses = 0;
+            const currentFrequency = window.budgetData.summaryFrequency;
 
-            let totalExpensesMonthly = 0;
-            window.budgetData.basicExpenses.forEach(item => totalExpensesMonthly += item.monthly);
-            window.budgetData.lifestyleExpenses.forEach(item => totalExpensesMonthly += item.monthly);
-            window.budgetData.loanRepayments.forEach(item => totalExpensesMonthly += item.monthly);
+            window.budgetData.income.forEach(item => {
+                const amounts = window.calculateAmounts(item.amount, item.frequency);
+                totalIncome += amounts[currentFrequency.toLowerCase()]; // Use selected frequency
+            });
 
-            const totalIncomeDisplay = document.getElementById('totalIncomeMonthly');
-            const totalExpensesDisplay = document.getElementById('totalExpensesMonthly');
-            const surplusDeficitDisplay = document.getElementById('surplusDeficitMonthly');
+            window.budgetData.basicExpenses.forEach(item => {
+                const amounts = window.calculateAmounts(item.amount, item.frequency);
+                totalExpenses += amounts[currentFrequency.toLowerCase()]; // Use selected frequency
+            });
+            window.budgetData.lifestyleExpenses.forEach(item => {
+                const amounts = window.calculateAmounts(item.amount, item.frequency);
+                totalExpenses += amounts[currentFrequency.toLowerCase()]; // Use selected frequency
+            });
+            window.budgetData.loanRepayments.forEach(item => {
+                const amounts = window.calculateAmounts(item.amount, item.frequency);
+                totalExpenses += amounts[currentFrequency.toLowerCase()]; // Use selected frequency
+            });
 
-            totalIncomeDisplay.textContent = totalIncomeMonthly.toFixed(2);
-            totalExpensesDisplay.textContent = totalExpensesMonthly.toFixed(2);
 
-            const surplusDeficit = totalIncomeMonthly - totalExpensesMonthly;
+            const totalIncomeDisplay = document.getElementById('totalIncomeSummary');
+            const totalExpensesDisplay = document.getElementById('totalExpensesSummary');
+            const surplusDeficitDisplay = document.getElementById('surplusDeficitSummary');
+            const summaryFrequencyLabel = document.getElementById('summaryFrequencyLabel');
+
+            totalIncomeDisplay.textContent = totalIncome.toFixed(2);
+            totalExpensesDisplay.textContent = totalExpenses.toFixed(2);
+
+            const surplusDeficit = totalIncome - totalExpenses;
             surplusDeficitDisplay.textContent = surplusDeficit.toFixed(2);
             surplusDeficitDisplay.classList.remove('surplus', 'deficit');
             if (surplusDeficit >= 0) {
@@ -518,22 +551,57 @@
             } else {
                 surplusDeficitDisplay.classList.add('deficit');
             }
+
+            // Update the label to reflect the current frequency
+            summaryFrequencyLabel.textContent = `Total ${currentFrequency} `;
         }
 
         // --- Event Handlers ---
 
-        // Handles input changes for amount and frequency fields
-        window.handleInputChange = (element) => {
-            const category = element.dataset.category; // This is the array name, e.g., 'income', 'basicExpenses'
+        // Handles input changes for amount fields (updates data and summary, but not UI until blur)
+        window.handleAmountInput = (element) => {
+            const category = element.dataset.category;
             const index = parseInt(element.dataset.index);
-
             let item = window.budgetData[category][index];
 
-            if (element.type === 'number') {
-                item.amount = parseFloat(element.value);
-            } else if (element.tagName === 'SELECT') {
-                item.frequency = element.value;
+            // Update the amount in the data model based on current input value
+            // Use parseFloat to handle incomplete numbers (e.g., '5', '50', '50.')
+            item.amount = parseFloat(element.value);
+
+            // Recalculate monthly/yearly for this item instantly (these are used for summary)
+            const calculated = window.calculateAmounts(item.amount, item.frequency);
+            item.monthly = calculated.monthly;
+            item.yearly = calculated.yearly;
+
+            // Update the summary immediately as user types
+            updateSummary();
+        };
+
+        // Handles blur event for amount fields (triggers re-render for precise display and saves data)
+        window.handleAmountBlur = (element) => {
+            const category = element.dataset.category;
+            // The index and item.amount are already updated by handleAmountInput.
+            // Now, trigger the re-render of the specific section to format the number display.
+            if (category === 'income') renderIncome();
+            else if (category === 'basicExpenses') renderBasicExpenses();
+            else if (category === 'lifestyleExpenses') renderLifestyleExpenses();
+            else if (category === 'loanRepayments') renderLoanRepayments();
+            // No need to call updateSummary here again, as handleAmountInput already does it
+            // and the individual render functions call it too.
+
+            // Save data to Firestore only after the user is done interacting with the field
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
             }
+        };
+
+        // Handles frequency changes (triggers re-render and saves data)
+        window.handleFrequencyChange = (element) => {
+            const category = element.dataset.category;
+            const index = parseInt(element.dataset.index);
+            let item = window.budgetData[category][index];
+
+            item.frequency = element.value;
 
             const calculated = window.calculateAmounts(item.amount, item.frequency);
             item.monthly = calculated.monthly;
@@ -546,7 +614,16 @@
             else if (category === 'loanRepayments') renderLoanRepayments();
 
             updateSummary();
-            // Only attempt to save if Firebase is properly initialized and authenticated
+            // Save data to Firestore
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
+            }
+        };
+
+        // Handles summary display frequency changes
+        window.handleSummaryFrequencyChange = (element) => {
+            window.budgetData.summaryFrequency = element.value;
+            updateSummary();
             if (db && userId && isAuthReady) {
                 window.saveDataToFirestore();
             }
@@ -737,6 +814,12 @@
             renderLoanRepayments();
             renderTaxCalculator();
             updateSummary();
+
+            // Set the summary frequency selector to the current value from budgetData
+            const summaryFrequencySelect = document.getElementById('summaryFrequencySelect');
+            if (summaryFrequencySelect) {
+                summaryFrequencySelect.value = window.budgetData.summaryFrequency;
+            }
         }
 
         // Run on window load
@@ -757,21 +840,34 @@
         <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">My Future Budgeting Tool</h1>
         <p id="userIdDisplay" class="text-sm text-gray-500 text-center mb-6">User ID: Loading...</p>
 
-        <!-- Overall Summary -->
-        <div class="summary-box grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div>
-                <p class="text-gray-600 text-lg mb-1">Total Monthly Income</p>
-                <p class="summary-value">$<span id="totalIncomeMonthly">0.00</span></p>
+        <!-- Overall Summary (Sticky Header Wrapper) -->
+        <div class="sticky-header-wrapper">
+            <div class="summary-box grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <p class="text-gray-600 text-lg mb-1"><span id="summaryFrequencyLabel">Total Monthly </span> Income</p>
+                    <p class="summary-value">$<span id="totalIncomeSummary">0.00</span></p>
+                </div>
+                <div>
+                    <p class="text-gray-600 text-lg mb-1"><span id="summaryFrequencyLabel2">Total Monthly </span> Expenses</p>
+                    <p class="summary-value">$<span id="totalExpensesSummary">0.00</span></p>
+                </div>
+                <div>
+                    <p class="text-gray-600 text-lg mb-1"><span id="summaryFrequencyLabel3">Monthly </span> Surplus/Deficit</p>
+                    <p class="summary-value">$<span id="surplusDeficitSummary" class="surplus">0.00</span></p>
+                </div>
             </div>
-            <div>
-                <p class="text-gray-600 text-lg mb-1">Total Monthly Expenses</p>
-                <p class="summary-value">$<span id="totalExpensesMonthly">0.00</span></p>
-            </div>
-            <div>
-                <p class="text-gray-600 text-lg mb-1">Monthly Surplus/Deficit</p>
-                <p class="summary-value">$<span id="surplusDeficitMonthly" class="surplus">0.00</span></p>
+            <!-- Frequency Selector for Summary -->
+            <div class="text-center mt-4">
+                <label for="summaryFrequencySelect" class="font-medium text-gray-700 mr-2">Display Summary as:</label>
+                <select id="summaryFrequencySelect" class="input-field inline-block w-auto" onchange="handleSummaryFrequencyChange(this)">
+                    <option value="Weekly">Weekly</option>
+                    <option value="Fortnightly">Fortnightly</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="Yearly">Yearly</option>
+                </select>
             </div>
         </div>
+
 
         <!-- Income Section -->
         <section class="mb-8">
