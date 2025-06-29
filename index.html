@@ -330,63 +330,77 @@
 
         // --- Rendering Functions ---
 
-        // Helper to create table row HTML
-        function createTableRowHtml(category, dataArray, sectionName) {
-            let html = '';
-            dataArray.forEach((item, index) => {
-                html += `
-                    <tr class="table-row">
-                        <td class="w-1/3">${item.name}</td>
-                        <td class="w-1/4">
-                            <input type="number" step="0.01" value="${item.amount}"
-                                class="input-field amount-input"
-                                data-category="${category}" data-section="${sectionName}" data-index="${index}"
-                                oninput="handleInputChange(this)">
-                        </td>
-                        <td class="w-1/4">
-                            <select class="input-field frequency-select"
-                                data-category="${category}" data-section="${sectionName}" data-index="${index}"
-                                onchange="handleInputChange(this)">
-                                <option value="Weekly" ${item.frequency === 'Weekly' ? 'selected' : ''}>Weekly</option>
-                                <option value="Fortnightly" ${item.frequency === 'Fortnightly' ? 'selected' : ''}>Fortnightly</option>
-                                <option value="Monthly" ${item.frequency === 'Monthly' ? 'selected' : ''}>Monthly</option>
-                                <option value="Yearly" ${item.frequency === 'Yearly' ? 'selected' : ''}>Yearly</option>
-                            </select>
-                        </td>
-                        <td class="w-1/6 text-right">${item.monthly.toFixed(2)}</td>
-                        <td class="w-1/6 text-right">${item.yearly.toFixed(2)}</td>
-                    </tr>
-                `;
-            });
-            return html;
+        // Helper to create a single table row HTML for an item
+        function renderItemRowHtml(item, originalIndex, category) {
+            return `
+                <tr class="table-row">
+                    <td class="w-1/3">${item.name}</td>
+                    <td class="w-1/4">
+                        <input type="number" step="0.01" value="${item.amount.toFixed(2)}"
+                            class="input-field amount-input"
+                            data-category="${category}" data-index="${originalIndex}"
+                            oninput="handleInputChange(this)">
+                    </td>
+                    <td class="w-1/4">
+                        <select class="input-field frequency-select"
+                            data-category="${category}" data-index="${originalIndex}"
+                            onchange="handleInputChange(this)">
+                            <option value="Weekly" ${item.frequency === 'Weekly' ? 'selected' : ''}>Weekly</option>
+                            <option value="Fortnightly" ${item.frequency === 'Fortnightly' ? 'selected' : ''}>Fortnightly</option>
+                            <option value="Monthly" ${item.frequency === 'Monthly' ? 'selected' : ''}>Monthly</option>
+                            <option value="Yearly" ${item.frequency === 'Yearly' ? 'selected' : ''}>Yearly</option>
+                        </select>
+                    </td>
+                    <td class="w-1/6 text-right">${item.monthly.toFixed(2)}</td>
+                    <td class="w-1/6 text-right">${item.yearly.toFixed(2)}</td>
+                </tr>
+            `;
         }
+
 
         // Function to render income section
         function renderIncome() {
             const incomeBody = document.getElementById('incomeBody');
-            incomeBody.innerHTML = createTableRowHtml('income', window.budgetData.income, 'income');
+            incomeBody.innerHTML = ''; // Clear existing rows
+            window.budgetData.income.forEach((item, index) => {
+                incomeBody.innerHTML += renderItemRowHtml(item, index, 'income');
+            });
             updateSummary();
             window.saveDataToFirestore();
         }
 
         // Function to render basic expenses section
         function renderBasicExpenses() {
-            const sections = [
-                { id: 'housingBody', data: window.budgetData.basicExpenses.filter(e => ['Mortgage', 'Board', 'Rent'].includes(e.name)) },
-                { id: 'maintenanceBody', data: window.budgetData.basicExpenses.filter(e => ['Security', 'Home Maintenance & Repairs', 'Major Improvements', 'Gardens and Fences', 'Pest Control', 'Electrical and Furniture Replacement', 'Linen and Utensils', 'Swimming Pool', 'Other (Maintenance)'].includes(e.name)) },
-                { id: 'foodBody', data: window.budgetData.basicExpenses.filter(e => ['Groceries', 'Bought Meals', 'Coffee\'s Out & Snacks', 'Other (Food)'].includes(e.name)) },
-                { id: 'educationalBody', data: window.budgetData.basicExpenses.filter(e => ['Study Course Fees', 'Professional Subscriptions', 'Student Union Fees', 'School Uniforms', 'Equipment and Tools', 'Books & Stationary', 'School Fees', 'Special Tuition (eg Music Lessons)', 'Excursions', 'Child Care', 'Other (Educational)'].includes(e.name)) },
-                { id: 'utilitiesBody', data: window.budgetData.basicExpenses.filter(e => ['Rates & Water', 'Body Corporate', 'Electricity / Gas', 'Home Phone', 'Mobile Phone', 'Internet', 'Other (Utilities)'].includes(e.name)) },
-                { id: 'transportBody', data: window.budgetData.basicExpenses.filter(e => ['Petrol', 'Registration', 'Motor Association', 'Maintenance & Repairs (Transport)', 'Public Transport', 'Parking Fees', 'Other (Transport)'].includes(e.name)) },
-                { id: 'healthBody', data: window.budgetData.basicExpenses.filter(e => ['Dentist', 'Doctor', 'Optometrist', 'Chemist', 'Chiropractor', 'Physiotherapist', 'Specialists', 'Other (Health)'].includes(e.name)) },
-                { id: 'insuranceBody', data: window.budgetData.basicExpenses.filter(e => ['Home & Contents', 'Medical (Insurance)', 'Vehicle (Insurance)', 'Boat & Caravan', 'Life (Insurance)', 'Income Protection', 'Other (Insurance)'].includes(e.name)) },
-                { id: 'clothingBody', data: window.budgetData.basicExpenses.filter(e => ['Work Clothing or Uniform', 'Social Clothing', 'Sports Clothing', 'Footwear', 'Haircare', 'Makeup & Toiletries'].includes(e.name)) }
-            ];
+            // Clear all basic expense table bodies first
+            document.getElementById('housingBody').innerHTML = '';
+            document.getElementById('maintenanceBody').innerHTML = '';
+            document.getElementById('foodBody').innerHTML = '';
+            document.getElementById('educationalBody').innerHTML = '';
+            document.getElementById('utilitiesBody').innerHTML = '';
+            document.getElementById('transportBody').innerHTML = '';
+            document.getElementById('healthBody').innerHTML = '';
+            document.getElementById('insuranceBody').innerHTML = '';
+            document.getElementById('clothingBody').innerHTML = '';
 
-            sections.forEach(section => {
-                const tbody = document.getElementById(section.id);
-                if (tbody) {
-                    tbody.innerHTML = createTableRowHtml('basicExpenses', section.data, 'basicExpenses');
+            // Grouping for rendering based on item name
+            const basicExpenseCategories = {
+                'housingBody': ['Mortgage', 'Board', 'Rent'],
+                'maintenanceBody': ['Security', 'Home Maintenance & Repairs', 'Major Improvements', 'Gardens and Fences', 'Pest Control', 'Electrical and Furniture Replacement', 'Linen and Utensils', 'Swimming Pool', 'Other (Maintenance)'],
+                'foodBody': ['Groceries', 'Bought Meals', 'Coffee\'s Out & Snacks', 'Other (Food)'],
+                'educationalBody': ['Study Course Fees', 'Professional Subscriptions', 'Student Union Fees', 'School Uniforms', 'Equipment and Tools', 'Books & Stationary', 'School Fees', 'Special Tuition (eg Music Lessons)', 'Excursions', 'Child Care', 'Other (Educational)'],
+                'utilitiesBody': ['Rates & Water', 'Body Corporate', 'Electricity / Gas', 'Home Phone', 'Mobile Phone', 'Internet', 'Other (Utilities)'],
+                'transportBody': ['Petrol', 'Registration', 'Motor Association', 'Maintenance & Repairs (Transport)', 'Public Transport', 'Parking Fees', 'Other (Transport)'],
+                'healthBody': ['Dentist', 'Doctor', 'Optometrist', 'Chemist', 'Chiropractor', 'Physiotherapist', 'Specialists', 'Other (Health)'],
+                'insuranceBody': ['Home & Contents', 'Medical (Insurance)', 'Vehicle (Insurance)', 'Boat & Caravan', 'Life (Insurance)', 'Income Protection', 'Other (Insurance)'],
+                'clothingBody': ['Work Clothing or Uniform', 'Social Clothing', 'Sports Clothing', 'Footwear', 'Haircare', 'Makeup & Toiletries']
+            };
+
+            window.budgetData.basicExpenses.forEach((item, index) => {
+                for (const tbodyId in basicExpenseCategories) {
+                    if (basicExpenseCategories[tbodyId].includes(item.name)) {
+                        document.getElementById(tbodyId).innerHTML += renderItemRowHtml(item, index, 'basicExpenses');
+                        break; // Found the category, move to next item
+                    }
                 }
             });
             updateSummary();
@@ -395,19 +409,30 @@
 
         // Function to render lifestyle expenses section
         function renderLifestyleExpenses() {
-            const sections = [
-                { id: 'holidayBody', data: window.budgetData.lifestyleExpenses.filter(e => ['Travel fares & Fuel', 'Accommodation', 'Meals (Holiday)', 'Sightseeing', 'Other (Holiday)'].includes(e.name)) },
-                { id: 'giftsBody', data: window.budgetData.lifestyleExpenses.filter(e => ['Donations', 'Birthday Gifts', 'Birthday Parties', 'Christmas Gifts', 'Work related Gifts', 'Aniversaries', 'Weddings', 'Births and Christenings', 'Special Occasions', 'Pocket Money', 'Other (Gifts)'].includes(e.name)) },
-                { id: 'petsBody', data: window.budgetData.lifestyleExpenses.filter(e => ['Food (Pets)', 'Vet Fees', 'Medication and Treatment (Pets)', 'Registration (Pets)', 'Other (Pets)'].includes(e.name)) },
-                { id: 'entertainmentBody', data: window.budgetData.lifestyleExpenses.filter(e => ['Movies & Concerts', 'Video Hire', 'Music / CD\'s', 'Exhibitions and displays', 'Eating out', 'Takeaway Meals', 'Club Fees', 'Newspapers/magazines/books', 'Other (Entertainment)'].includes(e.name)) },
-                { id: 'hobbiesBody', data: window.budgetData.lifestyleExpenses.filter(e => ['Equipment Purchases', 'Equipment Hire', 'Fees (Hobbies)', 'Club Memberships (Hobbies)', 'Other (Hobbies)'].includes(e.name)) },
-                { id: 'personalBody', data: window.budgetData.lifestyleExpenses.filter(e => ['Alcohol', 'Cigarettes', 'Other (Personal)'].includes(e.name)) }
-            ];
+            // Clear all lifestyle expense table bodies first
+            document.getElementById('holidayBody').innerHTML = '';
+            document.getElementById('giftsBody').innerHTML = '';
+            document.getElementById('petsBody').innerHTML = '';
+            document.getElementById('entertainmentBody').innerHTML = '';
+            document.getElementById('hobbiesBody').innerHTML = '';
+            document.getElementById('personalBody').innerHTML = '';
 
-            sections.forEach(section => {
-                const tbody = document.getElementById(section.id);
-                if (tbody) {
-                    tbody.innerHTML = createTableRowHtml('lifestyleExpenses', section.data, 'lifestyleExpenses');
+            // Grouping for rendering based on item name
+            const lifestyleExpenseCategories = {
+                'holidayBody': ['Travel fares & Fuel', 'Accommodation', 'Meals (Holiday)', 'Sightseeing', 'Other (Holiday)'],
+                'giftsBody': ['Donations', 'Birthday Gifts', 'Birthday Parties', 'Christmas Gifts', 'Work related Gifts', 'Aniversaries', 'Weddings', 'Births and Christenings', 'Special Occasions', 'Pocket Money', 'Other (Gifts)'],
+                'petsBody': ['Food (Pets)', 'Vet Fees', 'Medication and Treatment (Pets)', 'Registration (Pets)', 'Other (Pets)'],
+                'entertainmentBody': ['Movies & Concerts', 'Video Hire', 'Music / CD\'s', 'Exhibitions and displays', 'Eating out', 'Takeaway Meals', 'Club Fees', 'Newspapers/magazines/books', 'Other (Entertainment)'],
+                'hobbiesBody': ['Equipment Purchases', 'Equipment Hire', 'Fees (Hobbies)', 'Club Memberships (Hobbies)', 'Other (Hobbies)'],
+                'personalBody': ['Alcohol', 'Cigarettes', 'Other (Personal)']
+            };
+
+            window.budgetData.lifestyleExpenses.forEach((item, index) => {
+                for (const tbodyId in lifestyleExpenseCategories) {
+                    if (lifestyleExpenseCategories[tbodyId].includes(item.name)) {
+                        document.getElementById(tbodyId).innerHTML += renderItemRowHtml(item, index, 'lifestyleExpenses');
+                        break; // Found the category, move to next item
+                    }
                 }
             });
             updateSummary();
@@ -417,7 +442,10 @@
         // Function to render loan repayments section
         function renderLoanRepayments() {
             const loanBody = document.getElementById('loanBody');
-            loanBody.innerHTML = createTableRowHtml('loanRepayments', window.budgetData.loanRepayments, 'loanRepayments');
+            loanBody.innerHTML = ''; // Clear existing rows
+            window.budgetData.loanRepayments.forEach((item, index) => {
+                loanBody.innerHTML += renderItemRowHtml(item, index, 'loanRepayments');
+            });
             updateSummary();
             window.saveDataToFirestore();
         }
@@ -470,7 +498,6 @@
 
         // Handles input changes for amount and frequency fields
         window.handleInputChange = (element) => {
-            const section = element.dataset.section;
             const category = element.dataset.category; // This is the array name, e.g., 'income', 'basicExpenses'
             const index = parseInt(element.dataset.index);
 
@@ -1032,7 +1059,7 @@
                     <li>$15,601 - $53,500: 17.5%</li>
                     <li>$53,501 - $78,100: 30%</li>
                     <li>$78,101 - $180,000: 33%</li>
-                    <li>$180,001 +: 39%</li>
+                    <li>$180,000+: 39%</li>
                 </ul>
             </div>
         </section>
