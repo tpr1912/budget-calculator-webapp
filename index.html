@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Future Budgeting Tool</title>
+    <title>Rapid Value Calculator</title> <!-- Updated title -->
     <!-- Tailwind CSS CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter font from Google Fonts -->
@@ -153,1074 +153,378 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        let db;
-        let auth;
-        let userId = 'default-user-id'; // Default userId, will be updated on auth
-        let appId;
-        let isAuthReady = false; // Flag to ensure Firestore operations happen after auth
+        // Global Firebase variables
+        let app, db, auth;
+        let userId = null;
+        let authReady = false; // Flag to indicate if authentication is complete
 
-        // Function to display custom message box
+        // Data structure to hold current budget data
+        let budgetData = {
+            income: [],
+            expenses: [],
+            savingsGoals: []
+        };
+
+        // DOM Elements
+        const incomeItemsContainer = document.getElementById('incomeItems');
+        const expensesItemsContainer = document.getElementById('expenseItems');
+        const savingsItemsContainer = document.getElementById('savingsGoalItems');
+
+        const addIncomeBtn = document.getElementById('addIncome');
+        const addExpenseBtn = document.getElementById('addExpense');
+        const addSavingBtn = document.getElementById('addSavingGoal');
+
+        const totalIncomeDisplay = document.getElementById('totalIncome');
+        const totalExpensesDisplay = document.getElementById('totalExpenses');
+        const totalSavingsDisplay = document.getElementById('totalSavings');
+        const surplusDeficitDisplay = document.getElementById('surplusDeficit');
+        const userIdDisplay = document.getElementById('userIdDisplay'); // For showing userId
+
+        const messageBox = document.getElementById('messageBox');
+        const messageBoxOverlay = document.getElementById('messageBoxOverlay');
+        const messageBoxMessage = document.getElementById('messageBoxMessage');
+        const messageBoxCloseBtn = document.getElementById('messageBoxCloseBtn');
+
+        // Utility function to show custom message box
         function showMessageBox(message) {
-            const msgBox = document.getElementById('messageBox');
-            const msgBoxText = document.getElementById('messageBoxText');
-            const msgBoxOverlay = document.getElementById('messageBoxOverlay');
-            msgBoxText.textContent = message;
-            msgBox.style.display = 'flex';
-            msgBoxOverlay.style.display = 'block';
+            messageBoxMessage.textContent = message;
+            messageBox.style.display = 'flex';
+            messageBoxOverlay.style.display = 'block';
         }
 
-        // Function to hide custom message box
-        function hideMessageBox() {
-            const msgBox = document.getElementById('messageBox');
-            const msgBoxOverlay = document.getElementById('messageBoxOverlay');
-            msgBox.style.display = 'none';
-            msgBoxOverlay.style.display = 'none';
+        messageBoxCloseBtn.addEventListener('click', () => {
+            messageBox.style.display = 'none';
+            messageBoxOverlay.style.display = 'none';
+        });
+
+        // Utility function to format numbers as currency
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(amount);
         }
-        window.hideMessageBox = hideMessageBox; // Make it globally accessible
 
-        // Initialize Firebase and set up authentication
-        async function initializeFirebase() {
-            try {
-                // Accessing global variables provided by the Canvas environment
-                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-
-                if (Object.keys(firebaseConfig).length === 0 || !firebaseConfig.apiKey) {
-                    console.warn("Firebase config is missing or incomplete. Data persistence will not work.");
-                    showMessageBox("Error: Firebase configuration missing. Data will not be saved. You can still use the tool for calculations during this session.");
-                    // Continue with initial data rendering even if Firebase init fails
-                    initializeBudgetData();
-                    renderAllData();
-                    return; // Exit here, no need to proceed with Firebase app initialization or auth
-                }
-
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                // Set up authentication listener
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        console.log("Authenticated user ID:", userId);
-                        document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                        isAuthReady = true;
-                        setupFirestoreListener(); // Start listening for data once authenticated
-                    } else {
-                        // Attempt to sign in with custom token or anonymously
-                        if (typeof __initial_auth_token !== 'undefined') {
-                            try {
-                                await signInWithCustomToken(auth, __initial_auth_token);
-                            } catch (error) {
-                                console.error("Error signing in with custom token:", error);
-                                // Fallback to anonymous sign-in if custom token fails
-                                await signInAnonymously(auth);
-                            }
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    }
-                });
-
-            } catch (error) {
-                console.error("Error initializing Firebase:", error);
-                showMessageBox("Error initializing application. Data persistence might be affected. You can still use the tool for calculations during this session.");
-                // Ensure initial data rendering happens even if there's a Firebase initialization error
-                initializeBudgetData();
-                renderAllData();
+        // Function to convert amounts to monthly equivalent
+        function convertFrequencyToMonthly(amount, frequency) {
+            switch (frequency) {
+                case 'weekly': return amount * 4; // Approx 4 weeks in a month
+                case 'fortnightly': return amount * 2; // Approx 2 fortnights in a month
+                case 'monthly': return amount;
+                case 'annually': return amount / 12;
+                default: return 0;
             }
         }
 
-        // Object to hold all budgeting data
-        window.budgetData = {
-            income: [],
-            basicExpenses: [],
-            lifestyleExpenses: [],
-            loanRepayments: [],
-            taxCalc: {
-                beforeTaxAmount: 55000,
-                taxAmount: 0,
-                afterTaxAmount: 0
-            },
-            summaryFrequency: 'Monthly' // New property for summary display frequency
-        };
+        // Function to calculate and update totals
+        function updateCalculations() {
+            let totalIncome = 0;
+            budgetData.income.forEach(item => {
+                totalIncome += convertFrequencyToMonthly(parseFloat(item.amount || 0), item.frequency);
+            });
 
-        // Function to set up Firestore snapshot listener
-        function setupFirestoreListener() {
-            if (!db || !userId || !isAuthReady) {
-                console.warn("Firestore not ready or user not authenticated. Skipping data listener setup.");
+            let totalExpenses = 0;
+            budgetData.expenses.forEach(item => {
+                totalExpenses += convertFrequencyToMonthly(parseFloat(item.amount || 0), item.frequency);
+            });
+
+            let totalSavings = 0;
+            budgetData.savingsGoals.forEach(item => {
+                totalSavings += convertFrequencyToMonthly(parseFloat(item.amount || 0), item.frequency);
+            });
+
+            const surplusDeficit = totalIncome - totalExpenses - totalSavings;
+
+            totalIncomeDisplay.textContent = formatCurrency(totalIncome);
+            totalExpensesDisplay.textContent = formatCurrency(totalExpenses);
+            totalSavingsDisplay.textContent = formatCurrency(totalSavings);
+            surplusDeficitDisplay.textContent = formatCurrency(surplusDeficit);
+
+            if (surplusDeficit >= 0) {
+                surplusDeficitDisplay.classList.remove('deficit');
+                surplusDeficitDisplay.classList.add('surplus');
+            } else {
+                surplusDeficitDisplay.classList.remove('surplus');
+                surplusDeficitDisplay.classList.add('deficit');
+            }
+
+            saveBudgetData(); // Save data after every calculation update
+        }
+
+        // Function to render income items
+        function renderIncome() {
+            incomeItemsContainer.innerHTML = '';
+            budgetData.income.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.className = 'table-row';
+                row.innerHTML = `
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <input type="text" value="${item.name || ''}" placeholder="Source Name"
+                               class="input-field w-full"
+                               oninput="updateBudgetItem('income', ${index}, 'name', this.value)">
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <input type="number" value="${item.amount || ''}" placeholder="Amount"
+                               class="input-field w-full"
+                               oninput="updateBudgetItem('income', ${index}, 'amount', this.value)">
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <select class="input-field frequency-select w-full"
+                                onchange="updateBudgetItem('income', ${index}, 'frequency', this.value)">
+                            <option value="monthly" ${item.frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
+                            <option value="weekly" ${item.frequency === 'weekly' ? 'selected' : ''}>Weekly</option>
+                            <option value="fortnightly" ${item.frequency === 'fortnightly' ? 'selected' : ''}>Fortnightly</option>
+                            <option value="annually" ${item.frequency === 'annually' ? 'selected' : ''}>Annually</option>
+                        </select>
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200 text-center">
+                        <button onclick="removeBudgetItem('income', ${index})"
+                                class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-md transition-colors duration-200">
+                            Remove
+                        </button>
+                    </td>
+                `;
+                incomeItemsContainer.appendChild(row);
+            });
+            updateCalculations();
+        }
+
+        // Function to render expense items
+        function renderExpenses() {
+            expensesItemsContainer.innerHTML = '';
+            budgetData.expenses.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.className = 'table-row';
+                row.innerHTML = `
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <input type="text" value="${item.name || ''}" placeholder="Expense Name"
+                               class="input-field w-full"
+                               oninput="updateBudgetItem('expenses', ${index}, 'name', this.value)">
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <input type="number" value="${item.amount || ''}" placeholder="Amount"
+                               class="input-field w-full"
+                               oninput="updateBudgetItem('expenses', ${index}, 'amount', this.value)">
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <select class="input-field frequency-select w-full"
+                                onchange="updateBudgetItem('expenses', ${index}, 'frequency', this.value)">
+                            <option value="monthly" ${item.frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
+                            <option value="weekly" ${item.frequency === 'weekly' ? 'selected' : ''}>Weekly</option>
+                            <option value="fortnightly" ${item.frequency === 'fortnightly' ? 'selected' : ''}>Fortnightly</option>
+                            <option value="annually" ${item.frequency === 'annually' ? 'selected' : ''}>Annually</option>
+                        </select>
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200 text-center">
+                        <button onclick="removeBudgetItem('expenses', ${index})"
+                                class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-md transition-colors duration-200">
+                            Remove
+                        </button>
+                    </td>
+                `;
+                expensesItemsContainer.appendChild(row);
+            });
+            updateCalculations();
+        }
+
+        // Function to render savings goal items
+        function renderSavingsGoals() {
+            savingsItemsContainer.innerHTML = '';
+            budgetData.savingsGoals.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.className = 'table-row';
+                row.innerHTML = `
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <input type="text" value="${item.name || ''}" placeholder="Goal Name"
+                               class="input-field w-full"
+                               oninput="updateBudgetItem('savingsGoals', ${index}, 'name', this.value)">
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <input type="number" value="${item.amount || ''}" placeholder="Amount"
+                               class="input-field w-full"
+                               oninput="updateBudgetItem('savingsGoals', ${index}, 'amount', this.value)">
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200">
+                        <select class="input-field frequency-select w-full"
+                                onchange="updateBudgetItem('savingsGoals', ${index}, 'frequency', this.value)">
+                            <option value="monthly" ${item.frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
+                            <option value="weekly" ${item.frequency === 'weekly' ? 'selected' : ''}>Weekly</option>
+                            <option value="fortnightly" ${item.frequency === 'fortnightly' ? 'selected' : ''}>Fortnightly</option>
+                            <option value="annually" ${item.frequency === 'annually' ? 'selected' : ''}>Annually</option>
+                        </select>
+                    </td>
+                    <td class="px-4 py-2 border-b border-gray-200 text-center">
+                        <button onclick="removeBudgetItem('savingsGoals', ${index})"
+                                class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-md transition-colors duration-200">
+                            Remove
+                        </button>
+                    </td>
+                `;
+                savingsItemsContainer.appendChild(row);
+            });
+            updateCalculations();
+        }
+
+        // General function to update a budget item
+        function updateBudgetItem(type, index, field, value) {
+            if (type === 'income' || type === 'expenses' || type === 'savingsGoals') {
+                if (field === 'amount') {
+                    budgetData[type][index][field] = parseFloat(value) || 0;
+                } else {
+                    budgetData[type][index][field] = value;
+                }
+                updateCalculations(); // Recalculate and save after any change
+            }
+        }
+
+        // General function to add a new budget item
+        function addBudgetItem(type) {
+            if (type === 'income' || type === 'expenses' || type === 'savingsGoals') {
+                budgetData[type].push({ name: '', amount: 0, frequency: 'monthly' });
+                if (type === 'income') renderIncome();
+                else if (type === 'expenses') renderExpenses();
+                else renderSavingsGoals();
+            }
+        }
+
+        // General function to remove a budget item
+        function removeBudgetItem(type, index) {
+            if (type === 'income' || type === 'expenses' || type === 'savingsGoals') {
+                budgetData[type].splice(index, 1);
+                if (type === 'income') renderIncome();
+                else if (type === 'expenses') renderExpenses();
+                else renderSavingsGoals();
+            }
+        }
+
+        // Firebase Initialization and Authentication
+        window.onload = async function() {
+            // Initialize Firebase
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+            if (Object.keys(firebaseConfig).length === 0) {
+                console.error("Firebase config is missing. Please provide firebaseConfig.");
+                showMessageBox("Firebase configuration is missing. The app might not function correctly.");
                 return;
             }
 
-            const docRef = doc(db, "artifacts", appId, "users", userId, "budgetData", "currentBudget");
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
 
-            onSnapshot(docRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    window.budgetData = JSON.parse(data.data); // Parse the stored JSON string
-                    // Ensure new properties like summaryFrequency are set if old data doesn't have them
-                    if (typeof window.budgetData.summaryFrequency === 'undefined') {
-                        window.budgetData.summaryFrequency = 'Monthly';
-                    }
-                    console.log("Data loaded from Firestore:", window.budgetData);
-                    renderAllData(); // Re-render the UI with loaded data
+                // Sign in anonymously or with custom token
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
-                    console.log("No budget data found in Firestore for this user. Starting with default values.");
-                    // No need to save initial state here, as renderAllData will be called and handles it
+                    await signInAnonymously(auth);
                 }
-            }, (error) => {
-                console.error("Error listening to Firestore document:", error);
-                showMessageBox("Error loading data. Please check your internet connection.");
-            });
-        }
 
-        // Function to save data to Firestore
-        window.saveDataToFirestore = async function() {
-            // Only attempt to save if Firestore (db) and user (userId) are ready
-            if (!db || !userId || !isAuthReady) {
-                console.warn("Firestore not ready or user not authenticated. Data will not be saved permanently.");
-                return; // Do not attempt to save if Firebase is not initialized
+                // Listen for auth state changes
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = `User ID: ${userId}`;
+                        authReady = true;
+                        console.log("Firebase Authenticated. User ID:", userId);
+                        loadBudgetData(); // Load data once authenticated
+                    } else {
+                        userId = null;
+                        userIdDisplay.textContent = 'User ID: N/A';
+                        authReady = false;
+                        console.log("No user signed in.");
+                        showMessageBox("You are not signed in. Data will not be saved.");
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error initializing Firebase or authenticating:", error);
+                showMessageBox(`Error during app initialization: ${error.message}`);
+            }
+        };
+
+
+        // Function to save budget data to Firestore
+        async function saveBudgetData() {
+            if (!authReady || !userId) {
+                console.log("Not authenticated or userId not available. Cannot save data.");
+                return;
             }
             try {
-                // Serialize the budgetData object to a JSON string before saving
-                const dataToSave = JSON.stringify(window.budgetData);
-                const docRef = doc(db, "artifacts", appId, "users", userId, "budgetData", "currentBudget");
-                await setDoc(docRef, { data: dataToSave });
-                console.log("Data saved to Firestore successfully!");
+                // Path for private data: /artifacts/{appId}/users/{userId}/budgetData
+                const docRef = doc(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', 'users', userId, 'budgetData', 'myBudget');
+                await setDoc(docRef, budgetData);
+                console.log("Budget data saved successfully to Firestore.");
             } catch (error) {
-                console.error("Error saving data to Firestore:", error);
-                showMessageBox("Error saving your data. Please try again.");
+                console.error("Error saving budget data:", error);
+                showMessageBox(`Error saving data: ${error.message}`);
             }
-        };
-
-        // --- Core Calculation Logic ---
-
-        // Function to calculate all four frequencies (weekly, fortnightly, monthly, yearly)
-        window.calculateAmounts = (amount, frequency) => {
-            const parsedAmount = parseFloat(amount);
-            if (isNaN(parsedAmount) || parsedAmount < 0) {
-                return { weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 };
-            }
-
-            let yearlyAmount = 0;
-            switch (frequency) {
-                case 'Weekly': yearlyAmount = parsedAmount * 52; break;
-                case 'Fortnightly': yearlyAmount = parsedAmount * 26; break;
-                case 'Monthly': yearlyAmount = parsedAmount * 12; break;
-                case 'Yearly': yearlyAmount = parsedAmount * 1; break;
-                default: yearlyAmount = parsedAmount * 12; // Default to monthly if frequency is unknown
-            }
-
-            return {
-                weekly: yearlyAmount / 52,
-                fortnightly: yearlyAmount / 26,
-                monthly: yearlyAmount / 12,
-                yearly: yearlyAmount
-            };
-        };
-
-        // New Zealand Tax Brackets (Updated to reflect changes from 31 July 2024)
-        const nzTaxBrackets = [
-            { income: 15600, rate: 0.105 },
-            { income: 53500, rate: 0.175 },
-            { income: 78100, rate: 0.30 },
-            { income: 180000, rate: 0.33 },
-            { income: Infinity, rate: 0.39 } // For incomes above $180,000
-        ];
-
-        // Function to calculate tax
-        window.calculateTax = (income) => {
-            let tax = 0;
-            let remainingIncome = income;
-
-            for (let i = 0; i < nzTaxBrackets.length; i++) {
-                const bracket = nzTaxBrackets[i]; // Corrected typo: nzTaxTaxBrackets to nzTaxBrackets
-                const lowerBound = (i === 0) ? 0 : nzTaxBrackets[i - 1].income;
-                const upperBound = bracket.income;
-
-                if (remainingIncome <= 0) break;
-
-                // Calculate income within the current bracket
-                const incomeInBracket = Math.min(remainingIncome, upperBound - lowerBound);
-
-                // Add tax for this bracket
-                tax += incomeInBracket * bracket.rate;
-
-                remainingIncome -= incomeInBracket;
-            }
-            return tax;
-        };
-
-        // --- Rendering Functions ---
-
-        // Helper to create a single table row HTML for an item
-        function renderItemRowHtml(item, originalIndex, category) {
-            // Ensure item.amount is a valid number before toFixed(2) is called for display
-            // The value attribute of the input reflects the actual number,
-            // the display will be formatted on blur.
-            const displayAmount = isNaN(item.amount) ? '0' : item.amount; // Changed to not format on input
-            return `
-                <tr class="table-row">
-                    <td class="w-1/3">${item.name}</td>
-                    <td class="w-1/4">
-                        <input type="number" step="0.01" value="${displayAmount}"
-                            class="input-field amount-input"
-                            data-category="${category}" data-index="${originalIndex}"
-                            oninput="handleAmountInput(this)" onblur="handleAmountBlur(this)">
-                    </td>
-                    <td class="w-1/4">
-                        <select class="input-field frequency-select"
-                            data-category="${category}" data-index="${originalIndex}"
-                            onchange="handleFrequencyChange(this)">
-                            <option value="Weekly" ${item.frequency === 'Weekly' ? 'selected' : ''}>Weekly</option>
-                            <option value="Fortnightly" ${item.frequency === 'Fortnightly' ? 'selected' : ''}>Fortnightly</option>
-                            <option value="Monthly" ${item.frequency === 'Monthly' ? 'selected' : ''}>Monthly</option>
-                            <option value="Yearly" ${item.frequency === 'Yearly' ? 'selected' : ''}>Yearly</option>
-                        </select>
-                    </td>
-                    <td class="w-1/6 text-right">${item.monthly.toFixed(2)}</td>
-                    <td class="w-1/6 text-right">${item.yearly.toFixed(2)}</td>
-                </tr>
-            `;
         }
 
+        // Function to load budget data from Firestore
+        function loadBudgetData() {
+            if (!authReady || !userId) {
+                console.log("Not authenticated or userId not available. Cannot load data.");
+                return;
+            }
+            try {
+                const docRef = doc(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', 'users', userId, 'budgetData', 'myBudget');
 
-        // Function to render income section
-        function renderIncome() {
-            const incomeBody = document.getElementById('incomeBody');
-            incomeBody.innerHTML = ''; // Clear existing rows
-            window.budgetData.income.forEach((item, index) => {
-                incomeBody.innerHTML += renderItemRowHtml(item, index, 'income');
-            });
-            updateSummary();
-            // Removed saveDataToFirestore() from here
-        }
-
-        // Function to render basic expenses section
-        function renderBasicExpenses() {
-            // Clear all basic expense table bodies first
-            document.getElementById('housingBody').innerHTML = '';
-            document.getElementById('maintenanceBody').innerHTML = '';
-            document.getElementById('foodBody').innerHTML = '';
-            document.getElementById('educationalBody').innerHTML = '';
-            document.getElementById('utilitiesBody').innerHTML = '';
-            document.getElementById('transportBody').innerHTML = '';
-            document.getElementById('healthBody').innerHTML = '';
-            document.getElementById('insuranceBody').innerHTML = '';
-            document.getElementById('clothingBody').innerHTML = '';
-
-            // Grouping for rendering based on item name
-            const basicExpenseCategories = {
-                'housingBody': ['Mortgage', 'Board', 'Rent'],
-                'maintenanceBody': ['Security', 'Home Maintenance & Repairs', 'Major Improvements', 'Gardens and Fences', 'Pest Control', 'Electrical and Furniture Replacement', 'Linen and Utensils', 'Swimming Pool', 'Other (Maintenance)'],
-                'foodBody': ['Groceries', 'Bought Meals', 'Coffee\'s Out & Snacks', 'Other (Food)'],
-                'educationalBody': ['Study Course Fees', 'Professional Subscriptions', 'Student Union Fees', 'School Uniforms', 'Equipment and Tools', 'Books & Stationary', 'School Fees', 'Special Tuition (eg Music Lessons)', 'Excursions', 'Child Care', 'Other (Educational)'],
-                'utilitiesBody': ['Rates & Water', 'Body Corporate', 'Electricity / Gas', 'Home Phone', 'Mobile Phone', 'Internet', 'Other (Utilities)'],
-                'transportBody': ['Petrol', 'Registration', 'Motor Association', 'Maintenance & Repairs (Transport)', 'Public Transport', 'Parking Fees', 'Other (Transport)'],
-                'healthBody': ['Dentist', 'Doctor', 'Optometrist', 'Chemist', 'Chiropractor', 'Physiotherapist', 'Specialists', 'Other (Health)'],
-                'insuranceBody': ['Home & Contents', 'Medical (Insurance)', 'Vehicle (Insurance)', 'Boat & Caravan', 'Life (Insurance)', 'Income Protection', 'Other (Insurance)'],
-                'clothingBody': ['Work Clothing or Uniform', 'Social Clothing', 'Sports Clothing', 'Footwear', 'Haircare', 'Makeup & Toiletries']
-            };
-
-            window.budgetData.basicExpenses.forEach((item, index) => {
-                for (const tbodyId in basicExpenseCategories) {
-                    if (basicExpenseCategories[tbodyId].includes(item.name)) {
-                        document.getElementById(tbodyId).innerHTML += renderItemRowHtml(item, index, 'basicExpenses');
-                        break; // Found the category, move to next item
+                // Set up a real-time listener
+                onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        budgetData = docSnap.data();
+                        console.log("Budget data loaded from Firestore:", budgetData);
+                    } else {
+                        console.log("No existing budget data found for this user. Starting with empty.");
+                        budgetData = { income: [], expenses: [], savingsGoals: [] }; // Reset if no data
                     }
-                }
-            });
-            updateSummary();
-            // Removed saveDataToFirestore() from here
-        }
-
-        // Function to render lifestyle expenses section
-        function renderLifestyleExpenses() {
-            // Clear all lifestyle expense table bodies first
-            document.getElementById('holidayBody').innerHTML = '';
-            document.getElementById('giftsBody').innerHTML = '';
-            document.getElementById('petsBody').innerHTML = '';
-            document.getElementById('entertainmentBody').innerHTML = '';
-            document.getElementById('hobbiesBody').innerHTML = '';
-            document.getElementById('personalBody').innerHTML = '';
-
-            // Grouping for rendering based on item name
-            const lifestyleExpenseCategories = {
-                'holidayBody': ['Travel fares & Fuel', 'Accommodation', 'Meals (Holiday)', 'Sightseeing', 'Other (Holiday)'],
-                'giftsBody': ['Donations', 'Birthday Gifts', 'Birthday Parties', 'Christmas Gifts', 'Work related Gifts', 'Aniversaries', 'Weddings', 'Births and Christenings', 'Special Occasions', 'Pocket Money', 'Other (Gifts)'],
-                'petsBody': ['Food (Pets)', 'Vet Fees', 'Medication and Treatment (Pets)', 'Registration (Pets)', 'Other (Pets)'],
-                'entertainmentBody': ['Movies & Concerts', 'Video Hire', 'Music / CD\'s', 'Exhibitions and displays', 'Eating out', 'Takeaway Meals', 'Club Fees', 'Newspapers/magazines/books', 'Other (Entertainment)'],
-                'hobbiesBody': ['Equipment Purchases', 'Equipment Hire', 'Fees (Hobbies)', 'Club Memberships (Hobbies)', 'Other (Hobbies)'],
-                'personalBody': ['Alcohol', 'Cigarettes', 'Other (Personal)']
-            };
-
-            window.budgetData.lifestyleExpenses.forEach((item, index) => {
-                for (const tbodyId in lifestyleExpenseCategories) {
-                    if (lifestyleExpenseCategories[tbodyId].includes(item.name)) {
-                        document.getElementById(tbodyId).innerHTML += renderItemRowHtml(item, index, 'lifestyleExpenses');
-                        break; // Found the category, move to next item
-                    }
-                }
-            });
-            updateSummary();
-            // Removed saveDataToFirestore() from here
-        }
-
-        // Function to render loan repayments section
-        function renderLoanRepayments() {
-            const loanBody = document.getElementById('loanBody');
-            loanBody.innerHTML = ''; // Clear existing rows
-            window.budgetData.loanRepayments.forEach((item, index) => {
-                loanBody.innerHTML += renderItemRowHtml(item, index, 'loanRepayments');
-            });
-            updateSummary();
-            // Removed saveDataToFirestore() from here
-        }
-
-        // Function to render tax calculator section
-        function renderTaxCalculator() {
-            const beforeTaxInput = document.getElementById('beforeTaxAmount');
-            const taxAmountDisplay = document.getElementById('taxAmountDisplay');
-            const afterTaxAmountDisplay = document.getElementById('afterTaxAmountDisplay');
-
-            // Only update the value if the input field is NOT currently focused to allow typing
-            // This is the key fix for the tax calculator input bug
-            if (document.activeElement !== beforeTaxInput) {
-                // Keep the raw number in the value while not focused, will be formatted on blur
-                const displayBeforeTaxAmount = isNaN(window.budgetData.taxCalc.beforeTaxAmount) ? '0' : window.budgetData.taxCalc.beforeTaxAmount;
-                beforeTaxInput.value = displayBeforeTaxAmount;
-            }
-
-
-            const tax = window.calculateTax(window.budgetData.taxCalc.beforeTaxAmount);
-            window.budgetData.taxCalc.taxAmount = tax;
-            window.budgetData.taxCalc.afterTaxAmount = window.budgetData.taxCalc.beforeTaxAmount - tax;
-
-            taxAmountDisplay.textContent = window.budgetData.taxCalc.taxAmount.toFixed(2);
-            afterTaxAmountDisplay.textContent = window.budgetData.taxCalc.afterTaxAmount.toFixed(2);
-            // Removed saveDataToFirestore() from here
-        }
-
-        // Function to calculate and update summary totals
-        function updateSummary() {
-            let totalIncome = 0;
-            let totalExpenses = 0;
-            // Ensure the key matches the property names in the object returned by calculateAmounts
-            const currentFrequencyKey = window.budgetData.summaryFrequency.toLowerCase();
-
-            window.budgetData.income.forEach(item => {
-                // Access the pre-calculated amount directly from the item, based on the selected frequency
-                totalIncome += item[currentFrequencyKey];
-            });
-
-            window.budgetData.basicExpenses.forEach(item => {
-                totalExpenses += item[currentFrequencyKey];
-            });
-            window.budgetData.lifestyleExpenses.forEach(item => {
-                totalExpenses += item[currentFrequencyKey];
-            });
-            window.budgetData.loanRepayments.forEach(item => {
-                totalExpenses += item[currentFrequencyKey];
-            });
-
-
-            const totalIncomeDisplay = document.getElementById('totalIncomeSummary');
-            const totalExpensesDisplay = document.getElementById('totalExpensesSummary');
-            const surplusDeficitDisplay = document.getElementById('surplusDeficitSummary');
-            const summaryFrequencyLabel1 = document.getElementById('summaryFrequencyLabel1'); // For Income
-            const summaryFrequencyLabel2 = document.getElementById('summaryFrequencyLabel2'); // For Expenses
-            const summaryFrequencyLabel3 = document.getElementById('summaryFrequencyLabel3'); // For Surplus/Deficit
-
-
-            // Update the labels to reflect the current frequency
-            if (summaryFrequencyLabel1) summaryFrequencyLabel1.textContent = `Total ${window.budgetData.summaryFrequency} `;
-            if (summaryFrequencyLabel2) summaryFrequencyLabel2.textContent = `Total ${window.budgetData.summaryFrequency} `;
-            // The "Surplus/Deficit" label doesn't need "Total"
-            if (summaryFrequencyLabel3) summaryFrequencyLabel3.textContent = `${window.budgetData.summaryFrequency} `;
-
-            totalIncomeDisplay.textContent = totalIncome.toFixed(2);
-            totalExpensesDisplay.textContent = totalExpenses.toFixed(2);
-
-            const surplusDeficit = totalIncome - totalExpenses;
-            surplusDeficitDisplay.textContent = surplusDeficit.toFixed(2);
-            surplusDeficitDisplay.classList.remove('surplus', 'deficit');
-            if (surplusDeficit >= 0) {
-                surplusDeficitDisplay.classList.add('surplus');
-            } else {
-                surplusDeficitDisplay.classList.add('deficit');
-            }
-        }
-
-        // --- Event Handlers ---
-
-        // Handles input changes for amount fields (updates data and summary, but not UI until blur)
-        window.handleAmountInput = (element) => {
-            const category = element.dataset.category;
-            const index = parseInt(element.dataset.index);
-            let item = window.budgetData[category][index];
-
-            // Update the amount in the data model based on current input value
-            // Use parseFloat to handle incomplete numbers (e.g., '5', '50', '50.')
-            item.amount = parseFloat(element.value);
-
-            // Recalculate ALL frequency amounts for this item instantly
-            const calculated = window.calculateAmounts(item.amount, item.frequency);
-            item.weekly = calculated.weekly;
-            item.fortnightly = calculated.fortnightly;
-            item.monthly = calculated.monthly;
-            item.yearly = calculated.yearly;
-
-            // Update the summary immediately as user types
-            updateSummary();
-        };
-
-        // Handles blur event for amount fields (triggers re-render for precise display and saves data)
-        window.handleAmountBlur = (element) => {
-            const category = element.dataset.category;
-            // The index and item.amount are already updated by handleAmountInput.
-            // Now, trigger the re-render of the specific section to format the number display.
-            if (category === 'income') renderIncome();
-            else if (category === 'basicExpenses') renderBasicExpenses();
-            else if (category === 'lifestyleExpenses') renderLifestyleExpenses();
-            else if (category === 'loanRepayments') renderLoanRepayments();
-            // No need to call updateSummary here again, as handleAmountInput already does it
-            // and the individual render functions call it too.
-
-            // Save data to Firestore only after the user is done interacting with the field
-            if (db && userId && isAuthReady) {
-                window.saveDataToFirestore();
-            }
-        };
-
-        // Handles frequency changes (triggers re-render and saves data)
-        window.handleFrequencyChange = (element) => {
-            const category = element.dataset.category;
-            const index = parseInt(element.dataset.index);
-            let item = window.budgetData[category][index];
-
-            item.frequency = element.value;
-
-            // Recalculate ALL frequency amounts for this item
-            const calculated = window.calculateAmounts(item.amount, item.frequency);
-            item.weekly = calculated.weekly;
-            item.fortnightly = calculated.fortnightly;
-            item.monthly = calculated.monthly;
-            item.yearly = calculated.yearly;
-
-            // Re-render the specific section
-            if (category === 'income') renderIncome();
-            else if (category === 'basicExpenses') renderBasicExpenses();
-            else if (category === 'lifestyleExpenses') renderLifestyleExpenses();
-            else if (category === 'loanRepayments') renderLoanRepayments();
-
-            updateSummary();
-            // Save data to Firestore
-            if (db && userId && isAuthReady) {
-                window.saveDataToFirestore();
-            }
-        };
-
-        // Handles summary display frequency changes
-        window.handleSummaryFrequencyChange = (element) => {
-            window.budgetData.summaryFrequency = element.value;
-            updateSummary();
-            if (db && userId && isAuthReady) {
-                window.saveDataToFirestore();
-            }
-        };
-
-        // New: Handles input for tax calculator (updates data and summary, no re-render)
-        window.handleTaxAmountInput = (element) => {
-            const beforeTaxAmount = parseFloat(element.value);
-            if (!isNaN(beforeTaxAmount) && beforeTaxAmount >= 0) {
-                window.budgetData.taxCalc.beforeTaxAmount = beforeTaxAmount;
-            } else {
-                window.budgetData.taxCalc.beforeTaxAmount = 0; // Reset if invalid input
-            }
-            // Update the calculated tax and after-tax amounts immediately
-            const tax = window.calculateTax(window.budgetData.taxCalc.beforeTaxAmount);
-            window.budgetData.taxCalc.taxAmount = tax;
-            window.budgetData.taxCalc.afterTaxAmount = window.budgetData.taxCalc.beforeTaxAmount - tax;
-
-            // Update the display for tax and after-tax amounts instantly
-            document.getElementById('taxAmountDisplay').textContent = window.budgetData.taxCalc.taxAmount.toFixed(2);
-            document.getElementById('afterTaxAmountDisplay').textContent = window.budgetData.taxCalc.afterTaxAmount.toFixed(2);
-        };
-
-        // New: Handles blur for tax calculator (re-renders to format and saves data)
-        window.handleTaxAmountBlur = (element) => {
-            renderTaxCalculator(); // Re-render to format the input field and other displays
-            if (db && userId && isAuthReady) {
-                window.saveDataToFirestore();
-            }
-        };
-
-
-        // Initial data setup based on provided CSVs
-        function initializeBudgetData() {
-            window.budgetData.income = [
-                { name: 'Salary After Tax (1)', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Salary After Tax (2)', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Casual or Part Time Salary', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Allowance\'s', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Interest on Savings', amount: 0, frequency: 'Fortnightly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Interest on Investments', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Dividends', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Rent from Property', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Board', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other Income', amount: 0, frequency: 'Fortnightly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 }
-            ];
-
-            window.budgetData.basicExpenses = [
-                // Housing
-                { name: 'Mortgage', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Board', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Rent', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Maintenance
-                { name: 'Security', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Home Maintenance & Repairs', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Major Improvements', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Gardens and Fences', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Pest Control', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Electrical and Furniture Replacement', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Linen and Utensils', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Swimming Pool', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Maintenance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Food
-                { name: 'Groceries', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Bought Meals', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Coffee\'s Out & Snacks', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Food)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Educational & Professional
-                { name: 'Study Course Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Professional Subscriptions', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Student Union Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'School Uniforms', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Equipment and Tools', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Books & Stationary', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'School Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Special Tuition (eg Music Lessons)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Excursions', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Child Care', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Educational)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Utilities
-                { name: 'Rates & Water', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Body Corporate', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Electricity / Gas', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Home Phone', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Mobile Phone', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Internet', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Utilities)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Transport
-                { name: 'Petrol', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Registration', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Motor Association', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Maintenance & Repairs (Transport)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Public Transport', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Parking Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Transport)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Health & Medical
-                { name: 'Dentist', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Doctor', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Optometrist', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Chemist', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Chiropractor', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Physiotherapist', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Specialists', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Health)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Insurance
-                { name: 'Home & Contents', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Medical (Insurance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Vehicle (Insurance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Boat & Caravan', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Life (Insurance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Income Protection', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Insurance)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Clothing & Grooming
-                { name: 'Work Clothing or Uniform', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Social Clothing', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Sports Clothing', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Footwear', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Haircare', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Makeup & Toiletries', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 }
-            ];
-
-            window.budgetData.lifestyleExpenses = [
-                // Holiday & Travel
-                { name: 'Travel fares & Fuel', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Accommodation', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Meals (Holiday)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Sightseeing', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Holiday)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Gifts & Donations
-                { name: 'Donations', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Birthday Gifts', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Birthday Parties', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Christmas Gifts', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Work related Gifts', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Aniversaries', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Weddings', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Births and Christenings', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Special Occasions', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Pocket Money', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Gifts)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Pets
-                { name: 'Food (Pets)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Vet Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Medication and Treatment (Pets)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Registration (Pets)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Pets)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Entertainment
-                { name: 'Movies & Concerts', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Video Hire', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Music / CD\'s', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Exhibitions and displays', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Eating out', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Takeaway Meals', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Club Fees', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Newspapers/magazines/books', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Entertainment)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Hobbies & Sports
-                { name: 'Equipment Purchases', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Equipment Hire', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Fees (Hobbies)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Club Memberships (Hobbies)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Hobbies)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                // Personal
-                { name: 'Alcohol', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Cigarettes', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other (Personal)', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 }
-            ];
-
-            window.budgetData.loanRepayments = [
-                { name: 'Car Loan', amount: 0, frequency: 'Weekly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Credit Cards', amount: 0, frequency: 'Fortnightly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Store Cards', amount: 0, frequency: 'Monthly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Buy Now Pay Later', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Personal Bank Loan', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Personal Loan', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 },
-                { name: 'Other Loan', amount: 0, frequency: 'Yearly', weekly: 0, fortnightly: 0, monthly: 0, yearly: 0 }
-            ];
-
-            // Calculate initial monthly/yearly/weekly/fortnightly values for all data
-            ['income', 'basicExpenses', 'lifestyleExpenses', 'loanRepayments'].forEach(category => {
-                window.budgetData[category].forEach(item => {
-                    const calculated = window.calculateAmounts(item.amount, item.frequency);
-                    item.weekly = calculated.weekly;
-                    item.fortnightly = calculated.fortnightly;
-                    item.monthly = calculated.monthly;
-                    item.yearly = calculated.yearly;
+                    // Render all sections after data is loaded/reset
+                    renderIncome();
+                    renderExpenses();
+                    renderSavingsGoals();
+                    updateCalculations(); // Ensure calculations are updated on load
+                }, (error) => {
+                    console.error("Error fetching budget data:", error);
+                    showMessageBox(`Error loading data: ${error.message}`);
                 });
-            });
-
-            // Initialize tax calculator
-            const initialTaxCalc = window.budgetData.taxCalc;
-            const tax = window.calculateTax(initialTaxCalc.beforeTaxAmount);
-            initialTaxCalc.taxAmount = tax;
-            initialTaxCalc.afterTaxAmount = initialTaxCalc.beforeTaxAmount - tax;
-        }
-
-        // Render all sections when the document is ready
-        function renderAllData() {
-            renderIncome();
-            renderBasicExpenses();
-            renderLifestyleExpenses();
-            renderLoanRepayments();
-            renderTaxCalculator();
-            updateSummary();
-
-            // Set the summary frequency selector to the current value from budgetData
-            const summaryFrequencySelect = document.getElementById('summaryFrequencySelect');
-            if (summaryFrequencySelect) {
-                summaryFrequencySelect.value = window.budgetData.summaryFrequency;
+            } catch (error) {
+                console.error("Error setting up Firestore listener:", error);
+                showMessageBox(`Error loading data: ${error.message}`);
             }
         }
 
-        // Run on window load
-        window.onload = function() {
-            // Call initializeFirebase first. It will handle calling initializeBudgetData and renderAllData.
-            initializeFirebase();
-        };
+        // Add event listeners for "Add" buttons
+        addIncomeBtn.addEventListener('click', () => addBudgetItem('income'));
+        addExpenseBtn.addEventListener('click', () => addBudgetItem('expenses'));
+        addSavingBtn.addEventListener('click', () => addBudgetItem('savingsGoals'));
+
+        // Expose functions to global scope for inline HTML event handlers (e.g., oninput, onclick)
+        window.updateBudgetItem = updateBudgetItem;
+        window.addBudgetItem = addBudgetItem;
+        window.removeBudgetItem = removeBudgetItem;
     </script>
 </head>
-<body class="p-4">
-    <div class="message-box-overlay" id="messageBoxOverlay"></div>
-    <div class="message-box" id="messageBox">
-        <p id="messageBoxText" class="text-lg font-medium"></p>
-        <button onclick="hideMessageBox()">OK</button>
+<body class="bg-gray-100 text-gray-800">
+    <div class="sticky-header-wrapper">
+        <header class="container flex justify-between items-center bg-white p-4 rounded-b-none shadow-md">
+            <h1 class="text-3xl font-bold text-gray-900">Rapid Value Calculator</h1>
+            <div id="userIdDisplay" class="text-sm text-gray-600">User ID: Loading...</div>
+        </header>
     </div>
 
-    <div class="container">
-        <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">My Future Budgeting Tool</h1>
-        <p id="userIdDisplay" class="text-sm text-gray-500 text-center mb-6">User ID: Loading...</p>
-
-        <!-- Overall Summary (Sticky Header Wrapper) -->
-        <div class="sticky-header-wrapper">
-            <div class="summary-box grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="container bg-white p-6 rounded-t-none">
+        <!-- Summary Section -->
+        <div class="summary-box">
+            <h2 class="text-xl font-semibold mb-2">Monthly Overview</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-lg font-medium">
                 <div>
-                    <p class="text-gray-600 text-lg mb-1"><span id="summaryFrequencyLabel1">Total Monthly </span> Income</p>
-                    <p class="summary-value">$<span id="totalIncomeSummary">0.00</span></p>
+                    <p class="text-gray-600">Total Income:</p>
+                    <p id="totalIncome" class="summary-value text-green-600">$0.00</p>
                 </div>
                 <div>
-                    <p class="text-gray-600 text-lg mb-1"><span id="summaryFrequencyLabel2">Total Monthly </span> Expenses</p>
-                    <p class="summary-value">$<span id="totalExpensesSummary">0.00</span></p>
+                    <p class="text-gray-600">Total Expenses:</p>
+                    <p id="totalExpenses" class="summary-value text-red-600">$0.00</p>
                 </div>
                 <div>
-                    <p class="text-gray-600 text-lg mb-1"><span id="summaryFrequencyLabel3">Monthly </span> Surplus/Deficit</p>
-                    <p class="summary-value">$<span id="surplusDeficitSummary" class="surplus">0.00</span></p>
-                </div>
-            </div>
-            <!-- Frequency Selector for Summary -->
-            <div class="text-center mt-4">
-                <label for="summaryFrequencySelect" class="font-medium text-gray-700 mr-2">Display Summary as:</label>
-                <select id="summaryFrequencySelect" class="input-field inline-block w-auto" onchange="handleSummaryFrequencyChange(this)">
-                    <option value="Weekly">Weekly</option>
-                    <option value="Fortnightly">Fortnightly</option>
-                    <option value="Monthly">Monthly</option>
-                    <option value="Yearly">Yearly</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Tax Calculator Instructions - Moved here -->
-        <div class="tax-calculator-instructions mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-800">
-            <h3 class="text-lg font-bold mb-2">How to Use the Tax Calculator</h3>
-            <p class="mb-2">This section allows you to calculate your estimated annual tax and after-tax income in New Zealand.</p>
-            <ol class="list-decimal list-inside pl-4">
-                <li>**Enter your total annual income before tax** into the input field below.</li>
-                <li>**Click or tab out of the input field.** The tool will automatically calculate and display:
-                    <ul class="list-disc list-inside pl-6 mt-1">
-                        <li>Your **Estimated Annual Tax**.</li>
-                        <li>Your **Estimated Annual Income After Tax**.</li>
-                    </ul>
-                </li>
-            </ol>
-            <p class="mt-2">This calculator uses the current New Zealand tax brackets to give you an estimate.</p>
-        </div>
-
-        <!-- Tax Calculator Section - Moved to top -->
-        <section class="mb-8">
-            <h2 class="section-title">Tax Calculator (NZ)</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                <div class="flex flex-col gap-2">
-                    <label for="beforeTaxAmount" class="font-medium text-gray-700">Annual Income Before Tax ($)</label>
-                    <input type="number" step="0.01" id="beforeTaxAmount" value="55000"
-                        class="input-field" oninput="handleTaxAmountInput(this)" onblur="handleTaxAmountBlur(this)">
-                </div>
-                <div class="flex flex-col gap-2">
-                    <p class="font-medium text-gray-700">Estimated Annual Tax:</p>
-                    <p class="text-2xl font-bold text-gray-800">$<span id="taxAmountDisplay">0.00</span></p>
-                </div>
-                <div class="col-span-1 md:col-span-2 flex flex-col gap-2 mt-4">
-                    <p class="font-medium text-gray-700">Estimated Annual Income After Tax:</p>
-                    <p class="text-3xl font-bold text-indigo-600">$<span id="afterTaxAmountDisplay">0.00</span></p>
-                </div>
-            </div>
-            <div class="mt-6">
-                <h3 class="subsection-title">NZ Tax Brackets (Effective from 31 July 2024)</h3>
-                <ul class="list-disc list-inside text-gray-600">
-                    <li>$0 - $15,600: 10.5%</li>
-                    <li>$15,601 - $53,500: 17.5%</li>
-                    <li>$53,501 - $78,100: 30%</li>
-                    <li>$78,101 - $180,000: 33%</li>
-                    <li>$180,000+: 39%</li>
-                </ul>
-            </div>
-        </section>
-
-
-        <!-- Income Section -->
-        <section class="mb-8">
-            <h2 class="section-title">Income</h2>
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="incomeBody">
-                        <!-- Income rows will be rendered here by JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- Basic Expenses Section -->
-        <section class="mb-8">
-            <h2 class="section-title">Basic Expenses</h2>
-
-            <h3 class="subsection-title">Housing</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="housingBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Maintenance</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="maintenanceBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Food</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="foodBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Educational & Professional</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="educationalBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Utilities</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="utilitiesBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Transport</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="transportBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Health & Medical</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="healthBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Insurance</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="insuranceBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Clothing & Grooming</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="clothingBody"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- Lifestyle Expenses Section -->
-        <section class="mb-8">
-            <h2 class="section-title">Lifestyle Expenses</h2>
-
-            <h3 class="subsection-title">Holiday & Travel</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="holidayBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Gifts & Donations</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="giftsBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Pets</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="petsBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Entertainment</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="entertainmentBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Hobbies & Sports</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="hobbiesBody"></tbody>
-                </table>
-            </div>
-
-            <h3 class="subsection-title">Personal</h3>
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="personalBody"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- Loan Repayments Section -->
-        <section class="mb-8">
-            <h2 class="section-title">Loan Repayments</h2>
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white rounded-lg overflow-hidden">
-                    <thead>
-                        <tr class="table-header">
-                            <th>Category</th>
-                            <th>Amount</th>
-                            <th>Frequency</th>
-                            <th class="text-right">Monthly</th>
-                            <th class="text-right">Yearly</th>
-                        </tr>
-                    </thead>
-                    <tbody id="loanBody">
-                        <!-- Loan repayment rows will be rendered here by JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-    </div>
-</body>
-</html>
+                    <p class="text-gray-600">Total Savings Goals:</p>
+                    <p id="totalSavings" class="summary-value text-blue-600">$0.00</p>
+                </d
