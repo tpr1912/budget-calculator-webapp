@@ -705,7 +705,8 @@
             } else {
                 surplusDeficitDisplay.classList.add('deficit');
             }
-            window.saveDataToFirestore(); // Save after every summary update
+            // Debounce the save operation
+            debounceSaveData();
         }
 
         // --- Event Handlers for Budget Items ---
@@ -751,9 +752,10 @@
             else if (category === 'savingsGoals') renderSavingsGoals(); // New for savings goals
 
             // Save data to Firestore only after the user is done interacting with the field
-            if (db && userId && isAuthReady) {
-                window.saveDataToFirestore();
-            }
+            // No need to call debounceSaveData here as updateSummary already calls it.
+            // if (db && userId && isAuthReady) {
+            //     window.saveDataToFirestore();
+            // }
         };
 
         // Handles frequency changes (triggers re-render and saves data)
@@ -780,18 +782,20 @@
 
             updateSummary();
             // Save data to Firestore
-            if (db && userId && isAuthReady) {
-                window.saveDataToFirestore();
-            }
+            // No need to call debounceSaveData here as updateSummary already calls it.
+            // if (db && userId && isAuthReady) {
+            //     window.saveDataToFirestore();
+            // }
         };
 
         // Handles summary display frequency changes
         window.handleSummaryFrequencyChange = (element) => {
             window.budgetData.summaryFrequency = element.value;
             updateSummary();
-            if (db && userId && isAuthReady) {
-                window.saveDataToFirestore();
-            }
+            // No need to call debounceSaveData here as updateSummary already calls it.
+            // if (db && userId && isAuthReady) {
+            //     window.saveDataToFirestore();
+            // }
         };
 
         // Handles input for tax calculator (updates data and summary, no re-render)
@@ -815,8 +819,10 @@
         // Handles blur for tax calculator (re-renders to format and saves data)
         window.handleTaxAmountBlur = (element) => {
             renderTaxCalculator(); // Re-render to format the input field and other displays
+            // No need to call debounceSaveData here as updateSummary (which calls it)
+            // is not directly related to tax calculation.
             if (db && userId && isAuthReady) {
-                window.saveDataToFirestore();
+                debounceSaveData(); // Call debounced save explicitly here
             }
         };
 
@@ -838,7 +844,8 @@
                 else if (category === 'lifestyleExpenses') renderLifestyleExpenses(); // For a separate 'add lifestyle expense' button
                 else if (category === 'loanRepayments') renderLoanRepayments(); // For a separate 'add loan' button
                 updateSummary();
-                window.saveDataToFirestore();
+                // No need to call debounceSaveData here as updateSummary already calls it.
+                // window.saveDataToFirestore();
             } else {
                 console.error("Attempted to add item to non-existent category:", category);
             }
@@ -860,7 +867,8 @@
                 else if (category === 'loanRepayments') renderLoanRepayments();
                 else if (category === 'savingsGoals') renderSavingsGoals();
                 updateSummary();
-                window.saveDataToFirestore();
+                // No need to call debounceSaveData here as updateSummary already calls it.
+                // window.saveDataToFirestore();
             } else {
                 showMessageBox("You cannot remove default pre-filled items. You can only remove items you've added yourself.");
             }
@@ -916,6 +924,19 @@
         }
 
         // --- Firestore Data Operations ---
+
+        // Debounce mechanism for saving data
+        let saveTimer;
+        const DEBOUNCE_DELAY = 500; // milliseconds
+
+        function debounceSaveData() {
+            if (saveTimer) {
+                clearTimeout(saveTimer);
+            }
+            saveTimer = setTimeout(() => {
+                saveDataToFirestore();
+            }, DEBOUNCE_DELAY);
+        }
 
         // Function to save current budget data to Firestore
         window.saveDataToFirestore = async () => {
@@ -1051,21 +1072,34 @@
             </div>
         </div>
 
-        <!-- Tax Calculator Instructions - Moved here -->
-        <div class="tax-calculator-instructions mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-800">
-            <h3 class="text-lg font-bold mb-2">How to Use the Tax Calculator</h3>
-            <p class="mb-2">This section allows you to calculate your estimated annual tax and after-tax income in New Zealand.</p>
-            <ol class="list-decimal list-inside pl-4">
-                <li>**Enter your total annual income before tax** into the input field below.</li>
-                <li>**Click or tab out of the input field.** The tool will automatically calculate and display:
-                    <ul class="list-disc list-inside pl-6 mt-1">
-                        <li>Your **Estimated Annual Tax**.</li>
-                        <li>Your **Estimated Annual Income After Tax**.</li>
+        <!-- Instructions Section -->
+        <div class="mb-8 p-6 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded-lg">
+            <h2 class="text-xl font-semibold mb-3">How to Use the Rapid Value Calculator</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                <div>
+                    <p class="mb-2">This tool helps you manage your finances by tracking income, expenses, and savings goals, and calculating your estimated tax.</p>
+                    <ul class="list-disc list-inside space-y-2 pl-4">
+                        <li><strong>Income, Expenses, Savings Goals:</strong> Fill in the amounts for the pre-populated categories. Use the 'Frequency' dropdowns to specify if an amount is Weekly, Fortnightly, Monthly, or Yearly.</li>
+                        <li><strong>Summary:</strong> The "Monthly Overview" at the top automatically updates, showing your total income, total expenses, total savings, and the final surplus or deficit. You can change the summary display frequency (Weekly, Fortnightly, Monthly, Yearly) using the dropdown below the summary box.</li>
+                        <li><strong>Persistence:</strong> Your data is automatically saved as you make changes and will be loaded when you return.</li>
                     </ul>
-                </li>
-            </ol>
-            <p class="mt-2">This calculator uses the current New Zealand tax brackets to give you an estimate.</p>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-lg mb-2">Adding & Removing Items:</h3>
+                    <ul class="list-disc list-inside space-y-2 pl-4">
+                        <li>To add a new income source, expense, or savings goal, simply click the <strong>'+ Add Income'</strong>, <strong>'+ Add Expense'</strong>, <strong>'+ Add Lifestyle Expense'</strong>, <strong>'+ Add Loan Repayment'</strong>, or <strong>'+ Add Saving Goal'</strong> buttons at the bottom of each respective section.</li>
+                        <li>A new row will appear with a 'New Item' placeholder. Enter the name, amount, and select the frequency for your new entry.</li>
+                        <li>You can remove any items you've added dynamically by clicking the <strong>'Remove'</strong> button next to them. Pre-populated default items cannot be removed, but their values can be edited.</li>
+                    </ul>
+                    <h3 class="font-semibold text-lg mt-4 mb-2">Using the Tax Calculator:</h3>
+                    <ul class="list-disc list-inside space-y-2 pl-4">
+                        <li>In the "NZ Tax Calculator" section, enter your estimated <strong>Annual Income Before Tax</strong>.</li>
+                        <li>The tool will automatically calculate your estimated annual tax and your annual income after tax based on current NZ tax brackets.</li>
+                    </ul>
+                </div>
+            </div>
         </div>
+
 
         <!-- Tax Calculator Section - Moved to top -->
         <section class="mb-8">
