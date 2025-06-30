@@ -1,530 +1,447 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rapid Value Calculator</title> <!-- Updated title -->
-    <!-- Tailwind CSS CDN for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Inter font from Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6; /* Light gray background */
-            color: #374151; /* Dark gray text */
-        }
-        .container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 1.5rem;
-            background-color: #ffffff;
-            border-radius: 0.75rem; /* Rounded corners */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        .section-title {
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: #1f2937;
-            margin-bottom: 1.5rem;
-            border-bottom: 2px solid #e5e7eb;
-            padding-bottom: 0.75rem;
-        }
-        .subsection-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #4b5563;
-            margin-top: 1.5rem;
-            margin-bottom: 1rem;
-        }
-        .input-field {
-            padding: 0.6rem 0.8rem;
-            border: 1px solid #d1d5db;
-            border-radius: 0.5rem;
-            width: 100%;
-            transition: all 0.2s ease-in-out;
-        }
-        .input-field:focus {
-            outline: none;
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        }
-        .table-header th {
-            background-color: #e5e7eb;
-            padding: 0.8rem 1rem;
-            text-align: left;
-            font-weight: 600;
-            color: #4b5563;
-            border-bottom: 1px solid #d1d5db;
-        }
-        .table-row td {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .table-row:last-child td {
-            border-bottom: none;
-        }
-        .total-row td {
-            font-weight: 600;
-            background-color: #f3f4f6;
-        }
-        .summary-box {
-            background-color: #ecf0f1; /* Lighter grey for summary */
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            text-align: center;
-        }
-        .summary-value {
-            font-size: 2.25rem;
-            font-weight: 700;
-            color: #1f2937;
-        }
-        .surplus {
-            color: #10b981; /* Green for positive surplus */
-        }
-        .deficit {
-            color: #ef4444; /* Red for deficit */
-        }
-        .frequency-select {
-            appearance: none; /* Remove default arrow */
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='currentColor' class='w-6 h-6'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9' /%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 0.75rem center;
-            background-size: 1rem;
-            padding-right: 2.5rem; /* Make space for the custom arrow */
-        }
-        .message-box {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: #ffffff;
-            border-radius: 0.75rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            padding: 2rem;
-            z-index: 1000;
-            display: none; /* Hidden by default */
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            min-width: 300px;
-        }
-        .message-box-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 999;
-            display: none; /* Hidden by default */
-        }
-        .message-box button {
-            background-color: #4f46e5;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
-            margin-top: 1rem;
-            cursor: pointer;
-            transition: background-color 0.2s ease-in-out;
-        }
-        .message-box button:hover {
-            background-color: #4338ca;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapid Value Budgeting Tool</title>
+<!-- Tailwind CSS CDN for styling -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Inter font from Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body {
+font-family: 'Inter', sans-serif;
+background-color: #f3f4f6; /* Light gray background */
+color: #374151; /* Dark gray text */
+}
+.container {
+max-width: 1200px;
+margin: 2rem auto;
+padding: 1.5rem;
+background-color: #ffffff;
+border-radius: 0.75rem; /* Rounded corners */
+box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+.section-title {
+font-size: 1.75rem;
+font-weight: 700;
+color: #1f2937;
+margin-bottom: 1.5rem;
+border-bottom: 2px solid #e5e7eb;
+padding-bottom: 0.75rem;
+}
+.subsection-title {
+font-size: 1.25rem;
+font-weight: 600;
+color: #4b5563;
+margin-top: 1.5rem;
+margin-bottom: 1rem;
+}
+.input-field {
+padding: 0.6rem 0.8rem;
+border: 1px solid #d1d5db;
+border-radius: 0.5rem;
+width: 100%;
+transition: all 0.2s ease-in-out;
+}
+.input-field:focus {
+outline: none;
+border-color: #4f46e5;
+box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+.table-header th {
+background-color: #e5e7eb;
+padding: 0.8rem 1rem;
+text-align: left;
+font-weight: 600;
+color: #4b5563;
+border-bottom: 1px solid #d1d5db;
+}
+.table-row td {
+padding: 0.75rem 1rem;
+border-bottom: 1px solid #e5e7eb;
+}
+.table-row:last-child td {
+border-bottom: none;
+}
+.total-row td {
+font-weight: 600;
+background-color: #f3f4f6;
+}
+.summary-box {
+background-color: #ecf0f1; /* Lighter grey for summary */
+border-radius: 0.75rem;
+padding: 1.5rem;
+margin-bottom: 2rem;
+text-align: center;
+}
+.summary-value {
+font-size: 2.25rem;
+font-weight: 700;
+color: #1f2937;
+}
+.surplus {
+color: #10b981; /* Green for positive surplus */
+}
+.deficit {
+color: #ef4444; /* Red for deficit */
+}
+.frequency-select {
+appearance: none; /* Remove default arrow */
+background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='currentColor' class='w-6 h-6'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9' /%3E%3C/svg%3E");
+background-repeat: no-repeat;
+background-position: right 0.75rem center;
+background-size: 1rem;
+padding-right: 2.5rem; /* Make space for the custom arrow */
+}
+.message-box {
+position: fixed;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+background-color: #ffffff;
+border-radius: 0.75rem;
+box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+padding: 2rem;
+z-index: 1000;
+display: none; /* Hidden by default */
+flex-direction: column;
+align-items: center;
+justify-content: center;
+text-align: center;
+min-width: 300px;
+}
+.message-box-overlay {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background-color: rgba(0, 0, 0, 0.5);
+z-index: 999;
+display: none; /* Hidden by default */
+}
+.message-box button {
+background-color: #4f46e5;
+color: white;
+padding: 0.75rem 1.5rem;
+border-radius: 0.5rem;
+margin-top: 1rem;
+cursor: pointer;
+transition: background-color 0.2s ease-in-out;
+}
+.message-box button:hover {
+background-color: #4338ca;
+}
 
-        /* Sticky header styles */
-        .sticky-header-wrapper {
-            position: sticky;
-            top: 0;
-            z-index: 100; /* Ensure it stays above other content */
-            background-color: #f3f4f6; /* Match body background or set to white */
-            padding-top: 1rem; /* Add some space above the sticky element */
-            padding-bottom: 1rem; /* Add some space below the sticky element */
-            border-bottom: 1px solid #e5e7eb; /* Optional: A subtle line to separate */
-            margin-bottom: 2rem; /* Ensure space before content below it */
-        }
-    </style>
-    <!-- Firebase SDKs -->
-    <script type="module">
-        // Import necessary Firebase functions
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+/* Sticky header styles */
+.sticky-header-wrapper {
+position: sticky;
+top: 0;
+z-index: 100; /* Ensure it stays above other content */
+background-color: #f3f4f6; /* Match body background or set to white */
+padding-top: 1rem; /* Add some space above the sticky element */
+padding-bottom: 1rem; /* Add some space below the sticky element */
+border-bottom: 1px solid #e5e7eb; /* Optional: A subtle line to separate */
+margin-bottom: 2rem; /* Ensure space before content below it */
+}
+</style>
+<!-- Firebase SDKs -->
+<script type="module">
+// Import necessary Firebase functions
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Firebase variables
-        let app, db, auth;
-        let userId = null;
-        let authReady = false; // Flag to indicate if authentication is complete
+let db;
+let auth;
+let userId = 'default-user-id'; // Default userId, will be updated on auth
+let appId;
+let isAuthReady = false; // Flag to ensure Firestore operations happen after auth
 
-        // Data structure to hold current budget data
-        let budgetData = {
-            income: [],
-            expenses: [],
-            savingsGoals: []
-        };
+// Function to display custom message box
+function showMessageBox(message) {
+const msgBox = document.getElementById('messageBox');
+const msgBoxText = document.getElementById('messageBoxText');
+const msgBoxOverlay = document.getElementById('messageBoxOverlay');
+msgBoxText.textContent = message;
+msgBox.style.display = 'flex';
+msgBoxOverlay.style.display = 'block';
+}
 
-        // DOM Elements
-        const incomeItemsContainer = document.getElementById('incomeItems');
-        const expensesItemsContainer = document.getElementById('expenseItems');
-        const savingsItemsContainer = document.getElementById('savingsGoalItems');
+// Function to hide custom message box
+function hideMessageBox() {
+const msgBox = document.getElementById('messageBox');
+const msgBoxOverlay = document.getElementById('messageBoxOverlay');
+msgBox.style.display = 'none';
+msgBoxOverlay.style.display = 'none';
+}
+window.hideMessageBox = hideMessageBox; // Make it globally accessible
 
-        const addIncomeBtn = document.getElementById('addIncome');
-        const addExpenseBtn = document.getElementById('addExpense');
-        const addSavingBtn = document.getElementById('addSavingGoal');
+// Initialize Firebase and set up authentication
+async function initializeFirebase() {
+try {
+// Accessing global variables provided by the Canvas environment
+appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 
-        const totalIncomeDisplay = document.getElementById('totalIncome');
-        const totalExpensesDisplay = document.getElementById('totalExpenses');
-        const totalSavingsDisplay = document.getElementById('totalSavings');
-        const surplusDeficitDisplay = document.getElementById('surplusDeficit');
-        const userIdDisplay = document.getElementById('userIdDisplay'); // For showing userId
+if (Object.keys(firebaseConfig).length === 0 || !firebaseConfig.apiKey) {
+console.warn("Firebase config is missing or incomplete. Data persistence will not work.");
+showMessageBox("Error: Firebase configuration missing. Data will not be saved. You can still use the tool for calculations during this session.");
+// Continue with initial data rendering even if Firebase init fails
+initializeBudgetData();
+renderAllData();
+return; // Exit here, no need to proceed with Firebase app initialization or auth
+}
 
-        const messageBox = document.getElementById('messageBox');
-        const messageBoxOverlay = document.getElementById('messageBoxOverlay');
-        const messageBoxMessage = document.getElementById('messageBoxMessage');
-        const messageBoxCloseBtn = document.getElementById('messageBoxCloseBtn');
+const app = initializeApp(firebaseConfig);
+db = getFirestore(app);
+auth = getAuth(app);
 
-        // Utility function to show custom message box
-        function showMessageBox(message) {
-            messageBoxMessage.textContent = message;
-            messageBox.style.display = 'flex';
-            messageBoxOverlay.style.display = 'block';
-        }
+// Set up authentication listener
+onAuthStateChanged(auth, async (user) => {
+if (user) {
+userId = user.uid;
+console.log("Authenticated user ID:", userId);
+document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
+isAuthReady = true;
+setupFirestoreListener(); // Start listening for data once authenticated
+} else {
+// Attempt to sign in with custom token or anonymously
+if (typeof __initial_auth_token !== 'undefined') {
+try {
+await signInWithCustomToken(auth, __initial_auth_token);
+} catch (error) {
+console.error("Error signing in with custom token:", error);
+// Fallback to anonymous sign-in if custom token fails
+await signInAnonymously(auth);
+}
+} else {
+await signInAnonymously(auth);
+}
+}
+});
 
-        messageBoxCloseBtn.addEventListener('click', () => {
-            messageBox.style.display = 'none';
-            messageBoxOverlay.style.display = 'none';
-        });
+} catch (error) {
+console.error("Error initializing Firebase:", error);
+showMessageBox("Error initializing application. Data persistence might be affected. You can still use the tool for calculations during this session.");
+// Ensure initial data rendering happens even if there's a Firebase initialization error
+initializeBudgetData();
+renderAllData();
+}
+}
 
-        // Utility function to format numbers as currency
-        function formatCurrency(amount) {
-            return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(amount);
-        }
+// Object to hold all budgeting data
+window.budgetData = {
+income: [],
+basicExpenses: [],
+lifestyleExpenses: [],
+loanRepayments: [],
+taxCalc: {
+beforeTaxAmount: 55000,
+taxAmount: 0,
+afterTaxAmount: 0
+},
+summaryFrequency: 'Monthly' // New property for summary display frequency
+};
 
-        // Function to convert amounts to monthly equivalent
-        function convertFrequencyToMonthly(amount, frequency) {
-            switch (frequency) {
-                case 'weekly': return amount * 4; // Approx 4 weeks in a month
-                case 'fortnightly': return amount * 2; // Approx 2 fortnights in a month
-                case 'monthly': return amount;
-                case 'annually': return amount / 12;
-                default: return 0;
+// Function to set up Firestore snapshot listener
+function setupFirestoreListener() {
+if (!db || !userId || !isAuthReady) {
+console.warn("Firestore not ready or user not authenticated. Skipping data listener setup.");
+return;
+}
+
+const docRef = doc(db, "artifacts", appId, "users", userId, "budgetData", "currentBudget");
+
+onSnapshot(docRef, (docSnap) => {
+if (docSnap.exists()) {
+const data = docSnap.data();
+window.budgetData = JSON.parse(data.data); // Parse the stored JSON string
+// Ensure new properties like summaryFrequency are set if old data doesn't have them
+if (typeof window.budgetData.summaryFrequency === 'undefined') {
+window.budgetData.summaryFrequency = 'Monthly';
+}
+console.log("Data loaded from Firestore:", window.budgetData);
+renderAllData(); // Re-render the UI with loaded data
+} else {
+console.log("No budget data found in Firestore for this user. Starting with default values.");
+                    saveDataToFirestore(); // Save initial empty state if no data exists
+                    // No need to save initial state here, as renderAllData will be called and handles it
+}
+}, (error) => {
+console.error("Error listening to Firestore document:", error);
+@@ -334,7 +334,7 @@
+let remainingIncome = income;
+
+for (let i = 0; i < nzTaxBrackets.length; i++) {
+                const bracket = nzTaxTaxBrackets[i];
+                const bracket = nzTaxBrackets[i]; // Corrected typo: nzTaxTaxBrackets to nzTaxBrackets
+const lowerBound = (i === 0) ? 0 : nzTaxBrackets[i - 1].income;
+const upperBound = bracket.income;
+
+@@ -356,7 +356,9 @@
+// Helper to create a single table row HTML for an item
+function renderItemRowHtml(item, originalIndex, category) {
+// Ensure item.amount is a valid number before toFixed(2) is called for display
+            const displayAmount = isNaN(item.amount) ? '0.00' : item.amount.toFixed(2);
+            // The value attribute of the input reflects the actual number,
+            // the display will be formatted on blur.
+            const displayAmount = isNaN(item.amount) ? '0' : item.amount; // Changed to not format on input
+return `
+               <tr class="table-row">
+                   <td class="w-1/3">${item.name}</td>
+@@ -391,10 +393,7 @@
+incomeBody.innerHTML += renderItemRowHtml(item, index, 'income');
+});
+updateSummary();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
             }
-        }
+            // Removed saveDataToFirestore() from here
+}
 
-        // Function to calculate and update totals
-        function updateCalculations() {
-            let totalIncome = 0;
-            budgetData.income.forEach(item => {
-                totalIncome += convertFrequencyToMonthly(parseFloat(item.amount || 0), item.frequency);
-            });
-
-            let totalExpenses = 0;
-            budgetData.expenses.forEach(item => {
-                totalExpenses += convertFrequencyToMonthly(parseFloat(item.amount || 0), item.frequency);
-            });
-
-            let totalSavings = 0;
-            budgetData.savingsGoals.forEach(item => {
-                totalSavings += convertFrequencyToMonthly(parseFloat(item.amount || 0), item.frequency);
-            });
-
-            const surplusDeficit = totalIncome - totalExpenses - totalSavings;
-
-            totalIncomeDisplay.textContent = formatCurrency(totalIncome);
-            totalExpensesDisplay.textContent = formatCurrency(totalExpenses);
-            totalSavingsDisplay.textContent = formatCurrency(totalSavings);
-            surplusDeficitDisplay.textContent = formatCurrency(surplusDeficit);
-
-            if (surplusDeficit >= 0) {
-                surplusDeficitDisplay.classList.remove('deficit');
-                surplusDeficitDisplay.classList.add('surplus');
-            } else {
-                surplusDeficitDisplay.classList.remove('surplus');
-                surplusDeficitDisplay.classList.add('deficit');
+// Function to render basic expenses section
+@@ -432,10 +431,7 @@
+}
+});
+updateSummary();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
             }
+            // Removed saveDataToFirestore() from here
+}
 
-            saveBudgetData(); // Save data after every calculation update
-        }
-
-        // Function to render income items
-        function renderIncome() {
-            incomeItemsContainer.innerHTML = '';
-            budgetData.income.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.className = 'table-row';
-                row.innerHTML = `
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <input type="text" value="${item.name || ''}" placeholder="Source Name"
-                               class="input-field w-full"
-                               oninput="updateBudgetItem('income', ${index}, 'name', this.value)">
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <input type="number" value="${item.amount || ''}" placeholder="Amount"
-                               class="input-field w-full"
-                               oninput="updateBudgetItem('income', ${index}, 'amount', this.value)">
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <select class="input-field frequency-select w-full"
-                                onchange="updateBudgetItem('income', ${index}, 'frequency', this.value)">
-                            <option value="monthly" ${item.frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
-                            <option value="weekly" ${item.frequency === 'weekly' ? 'selected' : ''}>Weekly</option>
-                            <option value="fortnightly" ${item.frequency === 'fortnightly' ? 'selected' : ''}>Fortnightly</option>
-                            <option value="annually" ${item.frequency === 'annually' ? 'selected' : ''}>Annually</option>
-                        </select>
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200 text-center">
-                        <button onclick="removeBudgetItem('income', ${index})"
-                                class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-md transition-colors duration-200">
-                            Remove
-                        </button>
-                    </td>
-                `;
-                incomeItemsContainer.appendChild(row);
-            });
-            updateCalculations();
-        }
-
-        // Function to render expense items
-        function renderExpenses() {
-            expensesItemsContainer.innerHTML = '';
-            budgetData.expenses.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.className = 'table-row';
-                row.innerHTML = `
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <input type="text" value="${item.name || ''}" placeholder="Expense Name"
-                               class="input-field w-full"
-                               oninput="updateBudgetItem('expenses', ${index}, 'name', this.value)">
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <input type="number" value="${item.amount || ''}" placeholder="Amount"
-                               class="input-field w-full"
-                               oninput="updateBudgetItem('expenses', ${index}, 'amount', this.value)">
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <select class="input-field frequency-select w-full"
-                                onchange="updateBudgetItem('expenses', ${index}, 'frequency', this.value)">
-                            <option value="monthly" ${item.frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
-                            <option value="weekly" ${item.frequency === 'weekly' ? 'selected' : ''}>Weekly</option>
-                            <option value="fortnightly" ${item.frequency === 'fortnightly' ? 'selected' : ''}>Fortnightly</option>
-                            <option value="annually" ${item.frequency === 'annually' ? 'selected' : ''}>Annually</option>
-                        </select>
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200 text-center">
-                        <button onclick="removeBudgetItem('expenses', ${index})"
-                                class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-md transition-colors duration-200">
-                            Remove
-                        </button>
-                    </td>
-                `;
-                expensesItemsContainer.appendChild(row);
-            });
-            updateCalculations();
-        }
-
-        // Function to render savings goal items
-        function renderSavingsGoals() {
-            savingsItemsContainer.innerHTML = '';
-            budgetData.savingsGoals.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.className = 'table-row';
-                row.innerHTML = `
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <input type="text" value="${item.name || ''}" placeholder="Goal Name"
-                               class="input-field w-full"
-                               oninput="updateBudgetItem('savingsGoals', ${index}, 'name', this.value)">
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <input type="number" value="${item.amount || ''}" placeholder="Amount"
-                               class="input-field w-full"
-                               oninput="updateBudgetItem('savingsGoals', ${index}, 'amount', this.value)">
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <select class="input-field frequency-select w-full"
-                                onchange="updateBudgetItem('savingsGoals', ${index}, 'frequency', this.value)">
-                            <option value="monthly" ${item.frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
-                            <option value="weekly" ${item.frequency === 'weekly' ? 'selected' : ''}>Weekly</option>
-                            <option value="fortnightly" ${item.frequency === 'fortnightly' ? 'selected' : ''}>Fortnightly</option>
-                            <option value="annually" ${item.frequency === 'annually' ? 'selected' : ''}>Annually</option>
-                        </select>
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200 text-center">
-                        <button onclick="removeBudgetItem('savingsGoals', ${index})"
-                                class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-md transition-colors duration-200">
-                            Remove
-                        </button>
-                    </td>
-                `;
-                savingsItemsContainer.appendChild(row);
-            });
-            updateCalculations();
-        }
-
-        // General function to update a budget item
-        function updateBudgetItem(type, index, field, value) {
-            if (type === 'income' || type === 'expenses' || type === 'savingsGoals') {
-                if (field === 'amount') {
-                    budgetData[type][index][field] = parseFloat(value) || 0;
-                } else {
-                    budgetData[type][index][field] = value;
-                }
-                updateCalculations(); // Recalculate and save after any change
+// Function to render lifestyle expenses section
+@@ -467,10 +463,7 @@
+}
+});
+updateSummary();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
             }
-        }
+            // Removed saveDataToFirestore() from here
+}
 
-        // General function to add a new budget item
-        function addBudgetItem(type) {
-            if (type === 'income' || type === 'expenses' || type === 'savingsGoals') {
-                budgetData[type].push({ name: '', amount: 0, frequency: 'monthly' });
-                if (type === 'income') renderIncome();
-                else if (type === 'expenses') renderExpenses();
-                else renderSavingsGoals();
+// Function to render loan repayments section
+@@ -481,10 +474,7 @@
+loanBody.innerHTML += renderItemRowHtml(item, index, 'loanRepayments');
+});
+updateSummary();
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
             }
-        }
+            // Removed saveDataToFirestore() from here
+}
 
-        // General function to remove a budget item
-        function removeBudgetItem(type, index) {
-            if (type === 'income' || type === 'expenses' || type === 'savingsGoals') {
-                budgetData[type].splice(index, 1);
-                if (type === 'income') renderIncome();
-                else if (type === 'expenses') renderExpenses();
-                else renderSavingsGoals();
+// Function to render tax calculator section
+@@ -496,7 +486,8 @@
+// Only update the value if the input field is NOT currently focused to allow typing
+// This is the key fix for the tax calculator input bug
+if (document.activeElement !== beforeTaxInput) {
+                const displayBeforeTaxAmount = isNaN(window.budgetData.taxCalc.beforeTaxAmount) ? '0.00' : window.budgetData.taxCalc.beforeTaxAmount.toFixed(2);
+                // Keep the raw number in the value while not focused, will be formatted on blur
+                const displayBeforeTaxAmount = isNaN(window.budgetData.taxCalc.beforeTaxAmount) ? '0' : window.budgetData.taxCalc.beforeTaxAmount;
+beforeTaxInput.value = displayBeforeTaxAmount;
+}
+
+@@ -507,10 +498,7 @@
+
+taxAmountDisplay.textContent = window.budgetData.taxCalc.taxAmount.toFixed(2);
+afterTaxAmountDisplay.textContent = window.budgetData.taxCalc.afterTaxAmount.toFixed(2);
+            // Only attempt to save if Firebase is properly initialized and authenticated
+            if (db && userId && isAuthReady) {
+                window.saveDataToFirestore();
             }
-        }
+            // Removed saveDataToFirestore() from here
+}
 
-        // Firebase Initialization and Authentication
-        window.onload = async function() {
-            // Initialize Firebase
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+// Function to calculate and update summary totals
+@@ -899,8 +887,7 @@
+<h3 class="text-lg font-bold mb-2">How to Use the Tax Calculator</h3>
+<p class="mb-2">This section allows you to calculate your estimated annual tax and after-tax income in New Zealand.</p>
+<ol class="list-decimal list-inside pl-4">
+                <li>**Locate the "Annual Income Before Tax ($)" field** further down this page in the "Tax Calculator (NZ)" section.</li>
+                <li>**Enter your total annual income before tax** into this input field.</li>
+                <li>**Enter your total annual income before tax** into the input field below.</li>
+<li>**Click or tab out of the input field.** The tool will automatically calculate and display:
+<ul class="list-disc list-inside pl-6 mt-1">
+<li>Your **Estimated Annual Tax**.</li>
+@@ -911,6 +898,36 @@
+<p class="mt-2">This calculator uses the current New Zealand tax brackets to give you an estimate.</p>
+</div>
 
-            if (Object.keys(firebaseConfig).length === 0) {
-                console.error("Firebase config is missing. Please provide firebaseConfig.");
-                showMessageBox("Firebase configuration is missing. The app might not function correctly.");
-                return;
-            }
-
-            try {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                // Sign in anonymously or with custom token
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                // Listen for auth state changes
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        userIdDisplay.textContent = `User ID: ${userId}`;
-                        authReady = true;
-                        console.log("Firebase Authenticated. User ID:", userId);
-                        loadBudgetData(); // Load data once authenticated
-                    } else {
-                        userId = null;
-                        userIdDisplay.textContent = 'User ID: N/A';
-                        authReady = false;
-                        console.log("No user signed in.");
-                        showMessageBox("You are not signed in. Data will not be saved.");
-                    }
-                });
-
-            } catch (error) {
-                console.error("Error initializing Firebase or authenticating:", error);
-                showMessageBox(`Error during app initialization: ${error.message}`);
-            }
-        };
-
-
-        // Function to save budget data to Firestore
-        async function saveBudgetData() {
-            if (!authReady || !userId) {
-                console.log("Not authenticated or userId not available. Cannot save data.");
-                return;
-            }
-            try {
-                // Path for private data: /artifacts/{appId}/users/{userId}/budgetData
-                const docRef = doc(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', 'users', userId, 'budgetData', 'myBudget');
-                await setDoc(docRef, budgetData);
-                console.log("Budget data saved successfully to Firestore.");
-            } catch (error) {
-                console.error("Error saving budget data:", error);
-                showMessageBox(`Error saving data: ${error.message}`);
-            }
-        }
-
-        // Function to load budget data from Firestore
-        function loadBudgetData() {
-            if (!authReady || !userId) {
-                console.log("Not authenticated or userId not available. Cannot load data.");
-                return;
-            }
-            try {
-                const docRef = doc(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', 'users', userId, 'budgetData', 'myBudget');
-
-                // Set up a real-time listener
-                onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        budgetData = docSnap.data();
-                        console.log("Budget data loaded from Firestore:", budgetData);
-                    } else {
-                        console.log("No existing budget data found for this user. Starting with empty.");
-                        budgetData = { income: [], expenses: [], savingsGoals: [] }; // Reset if no data
-                    }
-                    // Render all sections after data is loaded/reset
-                    renderIncome();
-                    renderExpenses();
-                    renderSavingsGoals();
-                    updateCalculations(); // Ensure calculations are updated on load
-                }, (error) => {
-                    console.error("Error fetching budget data:", error);
-                    showMessageBox(`Error loading data: ${error.message}`);
-                });
-            } catch (error) {
-                console.error("Error setting up Firestore listener:", error);
-                showMessageBox(`Error loading data: ${error.message}`);
-            }
-        }
-
-        // Add event listeners for "Add" buttons
-        addIncomeBtn.addEventListener('click', () => addBudgetItem('income'));
-        addExpenseBtn.addEventListener('click', () => addBudgetItem('expenses'));
-        addSavingBtn.addEventListener('click', () => addBudgetItem('savingsGoals'));
-
-        // Expose functions to global scope for inline HTML event handlers (e.g., oninput, onclick)
-        window.updateBudgetItem = updateBudgetItem;
-        window.addBudgetItem = addBudgetItem;
-        window.removeBudgetItem = removeBudgetItem;
-    </script>
-</head>
-<body class="bg-gray-100 text-gray-800">
-    <div class="sticky-header-wrapper">
-        <header class="container flex justify-between items-center bg-white p-4 rounded-b-none shadow-md">
-            <h1 class="text-3xl font-bold text-gray-900">Rapid Value Calculator</h1>
-            <div id="userIdDisplay" class="text-sm text-gray-600">User ID: Loading...</div>
-        </header>
-    </div>
-
-    <div class="container bg-white p-6 rounded-t-none">
-        <!-- Summary Section -->
-        <div class="summary-box">
-            <h2 class="text-xl font-semibold mb-2">Monthly Overview</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-lg font-medium">
-                <div>
-                    <p class="text-gray-600">Total Income:</p>
-                    <p id="totalIncome" class="summary-value text-green-600">$0.00</p>
+        <!-- Tax Calculator Section - Moved to top -->
+        <section class="mb-8">
+            <h2 class="section-title">Tax Calculator (NZ)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <div class="flex flex-col gap-2">
+                    <label for="beforeTaxAmount" class="font-medium text-gray-700">Annual Income Before Tax ($)</label>
+                    <input type="number" step="0.01" id="beforeTaxAmount" value="55000"
+                        class="input-field" oninput="handleTaxAmountInput(this)" onblur="handleTaxAmountBlur(this)">
                 </div>
-                <div>
-                    <p class="text-gray-600">Total Expenses:</p>
-                    <p id="totalExpenses" class="summary-value text-red-600">$0.00</p>
+                <div class="flex flex-col gap-2">
+                    <p class="font-medium text-gray-700">Estimated Annual Tax:</p>
+                    <p class="text-2xl font-bold text-gray-800">$<span id="taxAmountDisplay">0.00</span></p>
                 </div>
-                <div>
-                    <p class="text-gray-600">Total Savings Goals:</p>
-                    <p id="totalSavings" class="summary-value text-blue-600">$0.00</p>
-                </d
+                <div class="col-span-1 md:col-span-2 flex flex-col gap-2 mt-4">
+                    <p class="font-medium text-gray-700">Estimated Annual Income After Tax:</p>
+                    <p class="text-3xl font-bold text-indigo-600">$<span id="afterTaxAmountDisplay">0.00</span></p>
+                </div>
+            </div>
+            <div class="mt-6">
+                <h3 class="subsection-title">NZ Tax Brackets (Effective from 31 July 2024)</h3>
+                <ul class="list-disc list-inside text-gray-600">
+                    <li>$0 - $15,600: 10.5%</li>
+                    <li>$15,601 - $53,500: 17.5%</li>
+                    <li>$53,501 - $78,100: 30%</li>
+                    <li>$78,101 - $180,000: 33%</li>
+                    <li>$180,000+: 39%</li>
+                </ul>
+            </div>
+        </section>
+
+
+<!-- Income Section -->
+<section class="mb-8">
+@@ -1204,36 +1221,6 @@
+</div>
+</section>
+
+        <!-- Tax Calculator Section -->
+        <section class="mb-8">
+            <h2 class="section-title">Tax Calculator (NZ)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <div class="flex flex-col gap-2">
+                    <label for="beforeTaxAmount" class="font-medium text-gray-700">Annual Income Before Tax ($)</label>
+                    <input type="number" step="0.01" id="beforeTaxAmount" value="55000.00"
+                        class="input-field" oninput="handleTaxAmountInput(this)" onblur="handleTaxAmountBlur(this)">
+                </div>
+                <div class="flex flex-col gap-2">
+                    <p class="font-medium text-gray-700">Estimated Annual Tax:</p>
+                    <p class="text-2xl font-bold text-gray-800">$<span id="taxAmountDisplay">0.00</span></p>
+                </div>
+                <div class="col-span-1 md:col-span-2 flex flex-col gap-2 mt-4">
+                    <p class="font-medium text-gray-700">Estimated Annual Income After Tax:</p>
+                    <p class="text-3xl font-bold text-indigo-600">$<span id="afterTaxAmountDisplay">0.00</span></p>
+                </div>
+            </div>
+            <div class="mt-6">
+                <h3 class="subsection-title">NZ Tax Brackets (Effective from 31 July 2024)</h3>
+                <ul class="list-disc list-inside text-gray-600">
+                    <li>$0 - $15,600: 10.5%</li>
+                    <li>$15,601 - $53,500: 17.5%</li>
+                    <li>$53,501 - $78,100: 30%</li>
+                    <li>$78,101 - $180,000: 33%</li>
+                    <li>$180,000+: 39%</li>
+                </ul>
+            </div>
+        </section>
+
+</div>
+</body>
+</html>
