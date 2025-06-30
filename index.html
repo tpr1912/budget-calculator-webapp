@@ -334,7 +334,7 @@
             let remainingIncome = income;
 
             for (let i = 0; i < nzTaxBrackets.length; i++) {
-                const bracket = nzTaxBrackets[i];
+                const bracket = nzTaxTaxBrackets[i];
                 const lowerBound = (i === 0) ? 0 : nzTaxBrackets[i - 1].income;
                 const upperBound = bracket.income;
 
@@ -894,6 +894,23 @@
             </div>
         </div>
 
+        <!-- Tax Calculator Instructions - Moved here -->
+        <div class="tax-calculator-instructions mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-800">
+            <h3 class="text-lg font-bold mb-2">How to Use the Tax Calculator</h3>
+            <p class="mb-2">This section allows you to calculate your estimated annual tax and after-tax income in New Zealand.</p>
+            <ol class="list-decimal list-inside pl-4">
+                <li>**Locate the "Annual Income Before Tax ($)" field** further down this page in the "Tax Calculator (NZ)" section.</li>
+                <li>**Enter your total annual income before tax** into this input field.</li>
+                <li>**Click or tab out of the input field.** The tool will automatically calculate and display:
+                    <ul class="list-disc list-inside pl-6 mt-1">
+                        <li>Your **Estimated Annual Tax**.</li>
+                        <li>Your **Estimated Annual Income After Tax**.</li>
+                    </ul>
+                </li>
+            </ol>
+            <p class="mt-2">This calculator uses the current New Zealand tax brackets to give you an estimate.</p>
+        </div>
+
 
         <!-- Income Section -->
         <section class="mb-8">
@@ -1190,22 +1207,6 @@
         <!-- Tax Calculator Section -->
         <section class="mb-8">
             <h2 class="section-title">Tax Calculator (NZ)</h2>
-            <!-- Instructions moved here for better visibility -->
-            <div class="tax-calculator-instructions mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-800">
-                <h3 class="text-lg font-bold mb-2">How to Use the Tax Calculator</h3>
-                <p class="mb-2">This section allows you to calculate your estimated annual tax and after-tax income in New Zealand.</p>
-                <ol class="list-decimal list-inside pl-4">
-                    <li>**Locate the "Annual Income Before Tax ($)" field.**</li>
-                    <li>**Enter your total annual income before tax** into this input field.</li>
-                    <li>**Click or tab out of the input field.** The tool will automatically calculate and display:
-                        <ul class="list-disc list-inside pl-6 mt-1">
-                            <li>Your **Estimated Annual Tax**.</li>
-                            <li>Your **Estimated Annual Income After Tax**.</li>
-                        </ul>
-                    </li>
-                </ol>
-                <p class="mt-2">This calculator uses the current New Zealand tax brackets to give you an estimate.</p>
-            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 <div class="flex flex-col gap-2">
                     <label for="beforeTaxAmount" class="font-medium text-gray-700">Annual Income Before Tax ($)</label>
